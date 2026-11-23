@@ -1,0 +1,10 @@
+# Cloudflare Pages project "wordle-wars" (built from this repo on every push to main).
+# Secret set in the dashboard, never here: WW_KEY (shared with the Apps Script's Script Properties).
+name = "wordle-wars"
+pages_build_output_dir = "public"
+compatibility_date = "2026-11-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wordle-wars"
+database_id = "REPLACE_WITH_D1_ID"

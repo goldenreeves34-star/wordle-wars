@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Wordle Wars">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#121213">
+<meta name="description" content="The family's monthly Wordle competition.">
+<meta name="robots" content="noindex">
+<title>Wordle Wars</title>
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-512.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root{
+/* Layout: one phone column under a fixed tab bar; every leaderboard row reads like a Wordle row */
+--paper:#f2f3f0;
+--card:#ffffff;
+--ink:#1a1a1b;
+--muted:#65686a;
+--line:#d3d6da;
+--tile:#787c7e;
+--green:#6aaa64;
+--yellow:#c9b458;
+--miss:#c0563f;
+--on-tile:#ffffff;
+--display:"Libre Franklin","Helvetica Neue",Arial,sans-serif;
+--serif:"Instrument Serif",Georgia,"Times New Roman",serif;
+--body:"Libre Franklin","Helvetica Neue",Arial,sans-serif;
+color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+:root:not([data-theme="light"]){
+--paper:#121213; --card:#1b1b1d; --ink:#f1f1ef; --muted:#9c9ea0; --line:#3a3a3c;
+--tile:#3a3a3c; --green:#538d4e; --yellow:#b59f3b; --miss:#c4604a; --on-tile:#ffffff;
+color-scheme:dark;
+}
+}
+:root[data-theme="dark"]{
+--paper:#121213; --card:#1b1b1d; --ink:#f1f1ef; --muted:#9c9ea0; --line:#3a3a3c;
+--tile:#3a3a3c; --green:#538d4e; --yellow:#b59f3b; --miss:#c4604a; --on-tile:#ffffff;
+color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+background:var(--paper); color:var(--ink); font-family:var(--body);
+font-size:16px; line-height:1.45; -webkit-font-smoothing:antialiased;
+padding-bottom:calc(92px + env(safe-area-inset-bottom));
+}
+:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
+.wrap{max-width:560px; margin:0 auto; padding:22px 16px 24px; display:flex; flex-direction:column; gap:22px}
+h1,h2,h3,p{margin:0}
+h2{font:800 13px/1.2 var(--display); letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+.section{display:flex; flex-direction:column; gap:10px}
+/* Title tiles */
+.brand{display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap}
+.title{display:flex; flex-direction:column; gap:5px; perspective:400px}
+.trow{display:flex; gap:5px}
+.t{width:38px; height:38px; display:grid; place-items:center; font:900 21px/1 var(--display);
+color:var(--on-tile); background:var(--tile); border-radius:3px; animation:flip .45s ease both}
+.t.g{background:var(--green)} .t.y{background:var(--yellow)}
+@keyframes flip{from{transform:rotateX(90deg)} to{transform:rotateX(0)}}
+.when{font-size:13px; color:var(--muted); text-align:right; font-variant-numeric:tabular-nums}
+.when strong{display:block; color:var(--ink); font:800 15px var(--display)}
+/* Hero */
+.hero{display:flex; flex-direction:column; gap:6px}
+.lead-line{font:italic 400 38px/1.02 var(--serif); text-wrap:balance}
+.lead-sub{color:var(--muted); font-size:15px}
+/* Leaderboard */
+.board{display:flex; flex-direction:column; background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden}
+.row{all:unset; cursor:pointer; display:grid; grid-template-columns:24px 1fr auto; gap:8px 12px;
+padding:14px 16px; align-items:center; border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.row:focus-visible{outline:2px solid var(--ink); outline-offset:-3px}
+.rank{font:800 15px var(--display); color:var(--muted); font-variant-numeric:tabular-nums}
+.who{display:flex; flex-direction:column; gap:6px; min-width:0}
+.ntiles{display:flex; gap:3px; flex-wrap:wrap}
+.ntiles span{width:24px; height:24px; display:grid; place-items:center; font:800 13px var(--display);
+color:var(--on-tile); background:var(--tile); border-radius:2px}
+.ntiles.g span{background:var(--green)} .ntiles.y span{background:var(--yellow)}
+.ntiles.sm span{width:20px; height:20px; font-size:11px}
+.meta{font-size:13px; color:var(--muted); display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+.pill{font:700 11px/1 var(--body); letter-spacing:.04em; text-transform:uppercase; padding:4px 7px; border-radius:999px; border:1px solid var(--line); color:var(--muted)}
+.pill.done{background:var(--green); border-color:var(--green); color:#fff}
+.total{font:900 32px/1 var(--display); font-variant-numeric:tabular-nums; text-align:right}
+.total small{display:block; font:600 10px/1.4 var(--body); color:var(--muted); letter-spacing:.06em; text-transform:uppercase}
+.strip{grid-column:1/-1; display:grid; grid-template-columns:repeat(var(--n),1fr); gap:2px}
+.strip i{aspect-ratio:1; border-radius:1.5px; background:var(--line); opacity:.55}
+.strip i.c-g{background:var(--green); opacity:1}
+.strip i.c-y{background:var(--yellow); opacity:1}
+.strip i.c-6{background:var(--tile); opacity:1}
+.strip i.c-x{background:var(--miss); opacity:1}
+.strip i.c-miss{background:transparent; box-shadow:inset 0 0 0 1.5px var(--miss); opacity:1}
+.strip i.c-carry{background:repeating-linear-gradient(45deg,var(--muted) 0 1.5px,transparent 1.5px 4px); opacity:.7}
+.strip i.c-today{background:transparent; box-shadow:inset 0 0 0 1.5px var(--ink); opacity:1}
+.legend{display:flex; flex-wrap:wrap; gap:6px 14px; font-size:12px; color:var(--muted)}
+.legend span{display:inline-flex; align-items:center; gap:6px}
+.legend i{width:11px; height:11px; border-radius:2px; display:inline-block}
+/* Cards and forms */
+.card{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:14px}
+.today-list{display:flex; flex-wrap:wrap; gap:8px}
+.tchip{display:inline-flex; align-items:center; gap:8px; padding:6px 10px 6px 6px; border-radius:6px; border:1px solid var(--line); font-weight:700; font-size:14px}
+.tchip b{width:24px; height:24px; display:grid; place-items:center; border-radius:3px; background:var(--line); color:var(--muted); font:900 13px var(--display)}
+.tchip.done b{background:var(--green); color:#fff}
+.tchip.done.x b{background:var(--miss)}
+.field{display:flex; flex-direction:column; gap:8px}
+label,.lbl{font:700 12px/1.2 var(--body); text-transform:uppercase; letter-spacing:.07em; color:var(--muted)}
+input[type=text],input[type=email],input[type=number],select,textarea{
+font:inherit; font-size:16px; color:var(--ink); background:var(--paper); border:1.5px solid var(--line);
+border-radius:8px; padding:12px; width:100%; min-width:0}
+textarea{resize:vertical; min-height:64px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--ink); outline-offset:0; border-color:transparent}
+.chips{display:flex; flex-wrap:wrap; gap:8px}
+.chip{all:unset; cursor:pointer; padding:9px 15px; border:1.5px solid var(--line); border-radius:999px; font-weight:700; font-size:15px}
+.chip[aria-pressed="true"]{background:var(--ink); color:var(--paper); border-color:var(--ink)}
+.chip:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
+.gpick{display:grid; grid-template-columns:repeat(7,1fr); gap:6px}
+.gbtn{all:unset; cursor:pointer; aspect-ratio:1; display:grid; place-items:center; font:900 22px var(--display);
+border:2px solid var(--line); border-radius:4px; transition:transform .12s}
+.gbtn:active{transform:scale(.94)}
+.gbtn[aria-pressed="true"]{background:var(--green); border-color:var(--green); color:#fff}
+.gbtn.x[aria-pressed="true"]{background:var(--miss); border-color:var(--miss)}
+.gbtn:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
+.btn{all:unset; cursor:pointer; display:flex; justify-content:center; align-items:center; text-align:center;
+padding:15px 18px; border-radius:8px; background:var(--green); color:#fff; font:800 16px/1.2 var(--body)}
+.btn[disabled]{opacity:.45; cursor:not-allowed}
+.btn.ghost{background:transparent; color:var(--ink); border:1.5px solid var(--line); padding:11px 14px; font-size:14px}
+.btn.small{padding:9px 12px; font-size:14px}
+.btn:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
+.linkish{all:unset; cursor:pointer; color:var(--muted); text-decoration:underline; font-size:14px}
+.note{font-size:14px; color:var(--muted)}
+.note.warn{color:var(--miss)}
+.inline{display:flex; gap:8px; align-items:center}
+.inline > input{flex:1}
+.check{display:flex; gap:10px; align-items:flex-start; font-size:15px}
+.check input{width:20px; height:20px; margin:1px 0 0; accent-color:var(--green)}
+/* Champions */
+.champ{display:flex; flex-direction:column; gap:4px; padding:18px 16px; border-top:1px solid var(--line)}
+.champ:first-child{border-top:0}
+.champ .big{font:italic 400 32px/1.05 var(--serif); text-wrap:balance}
+.champ .sub{font-size:14px; color:var(--muted); font-variant-numeric:tabular-nums}
+.champ.live{background:linear-gradient(0deg,transparent,transparent), var(--card)}
+.crown{display:inline-block; width:16px; height:12px; vertical-align:-1px; color:var(--yellow)}
+/* Players */
+.pgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px}
+.pcard{all:unset; cursor:pointer; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; display:flex; flex-direction:column; gap:10px}
+.pcard:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
+.pcard .stats{display:flex; gap:12px; font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums}
+.pcard .stats b{color:var(--ink); font:800 15px var(--display)}
+/* Profile */
+.statrow{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; text-align:center}
+.stat b{display:block; font:900 28px/1.1 var(--display); font-variant-numeric:tabular-nums}
+.stat span{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; font-weight:700}
+.dist{display:flex; flex-direction:column; gap:5px}
+.dist .bar{display:grid; grid-template-columns:16px 1fr; gap:8px; align-items:center; font:800 13px var(--display)}
+.dist .fill{background:var(--tile); color:#fff; text-align:right; padding:3px 7px; border-radius:2px; min-width:24px; font:800 12px var(--display); font-variant-numeric:tabular-nums}
+.dist .fill.top{background:var(--green)}
+.back{all:unset; cursor:pointer; font-weight:700; font-size:14px; color:var(--muted); display:inline-flex; gap:6px; align-items:center}
+/* Tabs */
+.tabs{position:fixed; left:0; right:0; bottom:0; z-index:5; background:var(--card); border-top:1px solid var(--line);
+padding:6px 8px calc(6px + env(safe-area-inset-bottom))}
+.tabs-in{max-width:560px; margin:0 auto; display:grid; grid-template-columns:repeat(4,1fr); gap:4px}
+.tab{all:unset; cursor:pointer; text-align:center; padding:10px 4px 9px; font:800 12px/1 var(--body); letter-spacing:.07em;
+text-transform:uppercase; color:var(--muted); border-radius:8px; position:relative}
+.tab[aria-current="page"]{color:var(--ink)}
+.tab[aria-current="page"]::before{content:""; position:absolute; top:0; left:50%; width:22px; height:4px; margin-left:-11px; border-radius:2px; background:var(--green)}
+.tab.log{background:var(--green); color:#fff}
+.tab.log[aria-current="page"]{color:#fff}
+.tab.log[aria-current="page"]::before{display:none}
+.tab:focus-visible{outline:2px solid var(--ink); outline-offset:-2px}
+.toast{position:fixed; left:50%; bottom:calc(96px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+background:var(--ink); color:var(--paper); padding:12px 16px; border-radius:8px; font-weight:700; font-size:15px;
+max-width:calc(100% - 32px); z-index:9; animation:pop .25s ease both}
+@keyframes pop{from{opacity:0; transform:translate(-50%,8px)} to{opacity:1; transform:translate(-50%,0)}}
+.empty{padding:20px 16px; color:var(--muted); font-size:15px}
+.sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
+.talk{display:flex; flex-direction:column; background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden}
+.tmsg{display:flex; flex-direction:column; gap:6px; padding:12px 16px; border-top:1px solid var(--line)}
+.tmsg:first-child{border-top:0}
+.tmsg .thead{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px; color:var(--muted)}
+.tmsg .tbody{font-size:16px; line-height:1.4; overflow-wrap:anywhere; white-space:pre-wrap}
+.tcount{font-size:12px; color:var(--muted); text-align:right; font-variant-numeric:tabular-nums}
+.rules{font-size:13px; color:var(--muted); display:flex; flex-direction:column; gap:4px}
+@media (prefers-reduced-motion: reduce){ *{animation:none !important; transition:none !important} }
+@media (max-width:380px){ .t{width:33px; height:33px; font-size:18px} .lead-line{font-size:32px} .ntiles span{width:21px; height:21px; font-size:12px} }
+</style>
+</head>
+<body>
+<main class="wrap" id="app"></main>
+<nav class="tabs" aria-label="Sections"><div class="tabs-in" id="tabs"></div></nav>
+<div id="toast-host"></div>
+<script>
+(function(){
+"use strict";
+/* ---------- Dates and puzzle numbers (all in Central time) ---------- */
+const TZ = "America/Chicago";
+const DAY = 86400000;
+const EPOCH = Date.UTC(2021, 5, 19); // Wordle #0
+function todayStr(){
+return new Intl.DateTimeFormat("en-CA",{timeZone:TZ,year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+}
+function toUTC(s){ const [y,m,d] = s.split("-").map(Number); return Date.UTC(y, m-1, d); }
+function fromUTC(t){ return new Date(t).toISOString().slice(0,10); }
+function addDays(s, n){ return fromUTC(toUTC(s) + n*DAY); }
+function puzzleOf(s){ return Math.round((toUTC(s) - EPOCH) / DAY); }
+function dateOf(n){ return fromUTC(EPOCH + n*DAY); }
+function monthOf(s){ return s.slice(0,7); }
+function daysInMonth(m){ const [y,mo] = m.split("-").map(Number); return new Date(Date.UTC(y, mo, 0)).getUTCDate(); }
+function monthDates(m){ const n = daysInMonth(m); return Array.from({length:n}, (_,i) => m + "-" + String(i+1).padStart(2,"0")); }
+function monthName(m, withYear){
+const [y,mo] = m.split("-").map(Number);
+const name = new Date(Date.UTC(y, mo-1, 15)).toLocaleString("en-US",{month:"long",timeZone:"UTC"});
+return withYear ? name + " " + y : name;
+}
+function prevMonth(m){ const [y,mo] = m.split("-").map(Number); const d = new Date(Date.UTC(y, mo-2, 15)); return d.toISOString().slice(0,7); }
+function dayLabel(s){ return new Date(toUTC(s)).toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",timeZone:"UTC"}); }
+function shortDay(s){ return new Date(toUTC(s)).toLocaleDateString("en-US",{month:"short",day:"numeric",timeZone:"UTC"}); }
+function fmtN(n){ return Number(n).toLocaleString("en-US"); }
+/* ---------- Helpers ---------- */
+function esc(v){ return String(v == null ? "" : v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function store(k, v){ try{ if(v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); }catch(e){} }
+function recall(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function slugify(name){ return String(name).toLowerCase().replace(/[^a-z0-9]+/g,"").slice(0,24); }
+function joinNames(names){
+if(names.length <= 1) return names[0] || "";
+if(names.length === 2) return names[0] + " and " + names[1];
+return names.slice(0,-1).join(", ") + " and " + names[names.length-1];
+}
+const TALK_MAX = 200;
+const CROWN = '<svg class="crown" viewBox="0 0 16 12" aria-hidden="true"><path fill="currentColor" d="M1 11h14l-1-8-3.5 3L8 1 5.5 6 2 3z"/></svg>';
+/* ---------- State ---------- */
+const state = {
+ready:false, view:"board", profileId:null,
+players:{}, scores:[], adj:[], champs:{}, talk:[],
+loaded:{players:false, scores:false, adjustments:false, champions:false},
+stale:false, error:null,
+me: recall("ww_me"),
+form:{date:null, guesses:null, talk:""},
+addName:"", emailDraft:{}, champForm:{month:"", player:"", total:""},
+saving:false
+};
+function playerList(){
+return Object.values(state.players).sort((a,b) => (a.order ?? 99) - (b.order ?? 99) || String(a.name).localeCompare(String(b.name)));
+}
+function pname(id){ return (state.players[id] && state.players[id].name) || id; }
+/* ---------- Scoring ----------
+Lowest total guesses for the month wins. X counts as 7.
+Once a day is over, a day a player did not log counts as 7.
+An adjustment carries in a total for early days (scores from the group chat). */
+function standings(m){
+const today = todayStr();
+const dates = monthDates(m);
+const rows = [];
+for(const p of playerList()){
+const adj = state.adj.find(a => a.player === p.id && a.month === m);
+const byDate = {};
+for(const s of state.scores){ if(s.player === p.id && s.month === m) byDate[s.date] = Number(s.guesses); }
+if(!adj && !Object.keys(byDate).length) continue;
+let total = adj ? (Number(adj.total) || 0) : 0, logged = 0, missed = 0;
+const cells = [];
+for(const d of dates){
+if(adj && adj.through && d <= adj.through){ cells.push({d, k:"carry"}); continue; }
+if(byDate[d] != null){ total += byDate[d]; logged++; cells.push({d, k:"score", g:byDate[d]}); }
+else if(d < today){ total += 7; missed++; cells.push({d, k:"miss"}); }
+else cells.push({d, k: d === today ? "today" : "future"});
+}
+rows.push({p, total, logged, missed, cells, adj, todayScore: byDate[today]});
+}
+rows.sort((a,b) => a.total - b.total || String(a.p.name).localeCompare(String(b.p.name)));
+let rank = 0, prev = null;
+rows.forEach((r,i) => { if(r.total !== prev){ rank = i+1; prev = r.total; } r.rank = rank; });
+return rows;
+}
+function championsList(){
+const cur = monthOf(todayStr());
+const months = new Set();
+state.scores.forEach(s => s.month && months.add(s.month));
+state.adj.forEach(a => a.month && months.add(a.month));
+Object.keys(state.champs).forEach(m => months.add(m));
+const out = [];
+for(const m of months){
+if(m >= cur) continue;
+const manual = state.champs[m];
+if(manual && Array.isArray(manual.players) && manual.players.length){
+out.push({month:m, ids:manual.players, total: manual.total ?? null, manual:true});
+continue;
+}
+const rows = standings(m);
+if(!rows.length) continue;
+const top = rows.filter(r => r.rank === 1);
+out.push({month:m, ids: top.map(r => r.p.id), total: top[0].total, runnerUp: rows.find(r => r.rank > 1) || null});
+}
+return out.sort((a,b) => b.month.localeCompare(a.month));
+}
+function titlesFor(id){ return championsList().filter(c => c.ids.includes(id)); }
+function playerStats(id){
+const mine = state.scores.filter(s => s.player === id);
+const dist = {1:0,2:0,3:0,4:0,5:0,6:0,7:0};
+let sum = 0;
+mine.forEach(s => { const g = Number(s.guesses); if(dist[g] != null) dist[g]++; sum += g; });
+const dates = new Set(mine.map(s => s.date));
+const today = todayStr();
+let streak = 0, d = dates.has(today) ? today : addDays(today, -1);
+while(dates.has(d)){ streak++; d = addDays(d, -1); }
+return {games: mine.length, avg: mine.length ? sum / mine.length : null, dist, streak};
+}
+/* ---------- Routing ---------- */
+function route(){ return state.view === "profile" ? {view:"profile", id:state.profileId} : {view:state.view}; }
+function go(h){
+if(h.startsWith("player-")){ state.view = "profile"; state.profileId = h.slice(7); }
+else state.view = h;
+render(); window.scrollTo(0,0);
+}
+/* ---------- Rendering ---------- */
+function titleTiles(){
+const r1 = [["W",""],["O","y"],["R",""],["D","y"],["L",""],["E","g"]];
+const r2 = [["W","g"],["A","g"],["R","g"],["S","g"]];
+let i = 0;
+const row = r => '<div class="trow">' + r.map(([c,k]) => `<span class="t ${k}" style="animation-delay:${(i++)*70}ms">${c}</span>`).join("") + "</div>";
+return `<h1 class="title"><span class="sr">Wordle Wars</span><span aria-hidden="true" style="display:contents">${row(r1)}${row(r2)}</span></h1>`;
+}
+function nameTiles(name, cls){
+const letters = [...String(name).toUpperCase().replace(/[^A-Z0-9]/g,"")].slice(0,8);
+return `<span class="ntiles ${cls||""}" aria-hidden="true">${letters.map(c => `<span>${esc(c)}</span>`).join("")}</span>`;
+}
+function cellClass(c){
+if(c.k === "score"){ if(c.g >= 7) return "c-x"; if(c.g === 6) return "c-6"; if(c.g >= 4) return "c-y"; return "c-g"; }
+if(c.k === "miss") return "c-miss";
+if(c.k === "carry") return "c-carry";
+if(c.k === "today") return "c-today";
+return "";
+}
+function cellTitle(c){
+const d = shortDay(c.d);
+if(c.k === "score") return d + ": " + (c.g >= 7 ? "X (7)" : c.g);
+if(c.k === "miss") return d + ": not logged (7)";
+if(c.k === "carry") return d + ": carried in from the group chat";
+if(c.k === "today") return d + ": today";
+return d;
+}
+function header(){
+const t = todayStr(), m = monthOf(t), dim = daysInMonth(m), day = Number(t.slice(8));
+const left = dim - day;
+return `<header class="brand">${titleTiles()}
+<p class="when"><strong>${esc(monthName(m, true))}</strong>Day ${day} of ${dim}<br>Today is Wordle ${fmtN(puzzleOf(t))}</p>
+</header>`;
+}
+function statusNote(){
+if(state.error) return `<div class="card"><p class="note warn">Couldn't reach the scoreboard. Check your connection, then close the app and open it again.</p></div>`;
+if(state.stale) return `<p class="note">Still reaching the scoreboard. Scores may be out of date.</p>`;
+return "";
+}
+function allLoaded(){ return Object.values(state.loaded).every(Boolean); }
+function viewBoard(){
+const t = todayStr(), m = monthOf(t);
+const rows = standings(m);
+const yesterday = addDays(t, -1);
+let hero = "";
+if(rows.length){
+const leaders = rows.filter(r => r.rank === 1);
+const next = rows.find(r => r.rank > 1);
+const through = monthOf(yesterday) === m ? shortDay(yesterday) : shortDay(t);
+if(leaders.length > 1){
+hero = `<p class="lead-line">${esc(joinNames(leaders.map(r => r.p.name)))} are tied up top.</p>
+<p class="lead-sub">${leaders[0].total} guesses each through ${esc(through)}${next ? `. ${esc(next.p.name)} is ${next.total - leaders[0].total} back.` : "."}</p>`;
+} else {
+hero = `<p class="lead-line">${esc(leaders[0].p.name)} is out front.</p>
+<p class="lead-sub">${leaders[0].total} guesses through ${esc(through)}${next ? `. ${esc(next.p.name)} is ${next.total - leaders[0].total} back.` : "."}</p>`;
+}
+} else if(allLoaded()){
+hero = `<p class="lead-line">${esc(monthName(m))} starts clean.</p><p class="lead-sub">First score logged takes the lead.</p>`;
+} else {
+hero = `<p class="lead-line">Loading the board…</p>`;
+}
+const board = rows.length ? `<div class="board" role="list">${rows.map(r => {
+const cls = r.rank === 1 ? "g" : r.rank === 2 ? "y" : "";
+const todayPill = r.todayScore != null
+? `<span class="pill done">Today ${r.todayScore >= 7 ? "X" : r.todayScore}</span>`
+: `<span class="pill">Today: not yet</span>`;
+const bits = [`${r.logged} logged`];
+if(r.missed) bits.push(`${r.missed} missed`);
+if(r.adj) bits.push(`${r.adj.total} carried in`);
+return `<button class="row" role="listitem" data-action="profile" data-id="${esc(r.p.id)}" aria-label="${esc(r.p.name)}, rank ${r.rank}, ${r.total} guesses">
+<span class="rank">${r.rank}</span>
+<span class="who">${nameTiles(r.p.name, cls)}<span class="meta">${todayPill}<span>${bits.join(" · ")}</span></span></span>
+<span class="total">${r.total}<small>guesses</small></span>
+<span class="strip" style="--n:${r.cells.length}" aria-hidden="true">${r.cells.map(c => `<i class="${cellClass(c)}" title="${esc(cellTitle(c))}"></i>`).join("")}</span>
+</button>`;
+}).join("")}</div>
+<div class="legend" aria-label="Day squares key">
+<span><i style="background:var(--green)"></i>1 to 3</span>
+<span><i style="background:var(--yellow)"></i>4 or 5</span>
+<span><i style="background:var(--tile)"></i>6</span>
+<span><i style="background:var(--miss)"></i>X</span>
+<span><i style="box-shadow:inset 0 0 0 1.5px var(--miss)"></i>Not logged</span>
+<span><i style="background:repeating-linear-gradient(45deg,var(--muted) 0 1.5px,transparent 1.5px 4px)"></i>From the group chat</span>
+</div>` : (allLoaded() ? `<div class="board"><p class="empty">Nobody has logged a score in ${esc(monthName(m))} yet.</p></div>` : "");
+const n = puzzleOf(t);
+const todayChips = playerList().map(p => {
+const s = state.scores.find(x => x.player === p.id && x.date === t);
+const g = s ? Number(s.guesses) : null;
+return `<span class="tchip ${g != null ? "done" : ""} ${g >= 7 ? "x" : ""}"><b>${g == null ? "?" : g >= 7 ? "X" : g}</b>${esc(p.name)}</span>`;
+}).join("");
+const waiting = playerList().filter(p => !state.scores.some(x => x.player === p.id && x.date === t)).length;
+return `${header()}${statusNote()}
+<section class="hero" aria-live="polite">${hero}</section>
+<section class="section"><h2>${esc(monthName(m, true))} standings</h2>${board}</section>
+<section class="card">
+<div class="section"><h2>Wordle ${fmtN(n)} · today</h2>
+<div class="today-list">${todayChips || '<span class="note">No players yet.</span>'}</div></div>
+<button class="btn" data-action="go" data-to="log">${waiting ? "Log today's score" : "Everyone's in. Change a score"}</button>
+</section>
+${talkFeed()}
+<section class="rules">
+<p>Lowest total guesses for the month wins. An X counts as 7.</p>
+<p>Once a day ends, a day you didn't log counts as 7, so log late if you forget. You can fill in any day this month.</p>
+<p>The board resets on the 1st and the winner goes on the Champions wall. Scout's honor.</p>
+</section>`;
+}
+function timeAgo(iso){
+const t = Date.parse(iso); if(!t) return "";
+const s = Math.max(0, (Date.now() - t) / 1000);
+if(s < 60) return "just now";
+if(s < 3600) return Math.floor(s/60) + "m ago";
+if(s < 86400) return Math.floor(s/3600) + "h ago";
+const days = Math.floor(s/86400);
+return days === 1 ? "yesterday" : days + "d ago";
+}
+function talkFeed(){
+const list = (state.talk || []).slice(0, 20);
+const body = list.length ? list.map(x => {
+const sc = state.scores.find(s => s.player === x.player && s.date === x.date);
+const g = sc ? Number(sc.guesses) : null;
+const cls = g == null ? "" : g <= 3 ? "g" : g <= 5 ? "y" : "";
+return `<div class="tmsg">
+<div class="thead"><span class="sr">${esc(pname(x.player))}</span>${nameTiles(pname(x.player), cls + " sm")}<span>${esc(timeAgo(x.at))}${g != null ? ` · ${g >= 7 ? "X" : g} on Wordle ${fmtN(x.puzzle)}` : ""}</span></div>
+<p class="tbody">${esc(x.text)}</p></div>`;
+}).join("") : `<p class="empty">Quiet in here. Somebody talk some trash.</p>`;
+return `<section class="section"><h2>Trash talk</h2><div class="talk">${body}</div>
+<button class="btn ghost" data-action="go" data-to="log">Talk some trash</button></section>`;
+}
+function allowedDates(){
+const t = todayStr();
+const first = monthOf(t) + "-01";
+const y = addDays(t, -1);
+const start = y < first ? y : first;
+const out = [];
+for(let d = t; d >= start; d = addDays(d, -1)) out.push(d);
+return out;
+}
+function viewLog(){
+const t = todayStr();
+const players = playerList();
+const dates = allowedDates();
+if(!state.form.date || !dates.includes(state.form.date)) state.form.date = t;
+const me = state.me && state.players[state.me] ? state.me : null;
+const d = state.form.date, n = puzzleOf(d), g = state.form.guesses;
+const existing = me ? state.scores.find(s => s.player === me && s.date === d) : null;
+const gLabel = g == null ? "" : g >= 7 ? "X" : String(g);
+const talk = state.form.talk.trim();
+const canSubmit = me && (g != null || talk) && !state.saving && state.ready;
+const submitText = !me ? "Pick your name first" : g == null ? (talk ? "Post your trash talk" : "Pick your guesses or talk some trash") :
+`Log ${pname(me)}'s ${gLabel} for Wordle ${fmtN(n)}${talk ? " and post it" : ""}`;
+return `${header()}${statusNote()}
+<section class="section"><h2>Log a score</h2></section>
+<section class="card">
+<div class="field"><span class="lbl" id="who-l">Who's playing?</span>
+<div class="chips" role="group" aria-labelledby="who-l">${players.map(p =>
+`<button class="chip" data-action="me" data-id="${esc(p.id)}" aria-pressed="${p.id === me}">${esc(p.name)}</button>`).join("") || '<span class="note">Add players on the Players tab.</span>'}</div>
+</div>
+<div class="field"><label for="talk">Trash talk (optional)</label>
+<textarea id="talk" data-input="talk" maxlength="${TALK_MAX}" placeholder="Say it to their face. It goes on the Board.">${esc(state.form.talk)}</textarea>
+<span class="tcount" id="talk-count">${state.form.talk.length}/${TALK_MAX}</span>
+</div>
+<div class="field"><label for="date">Which puzzle?</label>
+<select id="date" data-input="date">${dates.map(x =>
+`<option value="${x}" ${x === d ? "selected" : ""}>${x === t ? "Today" : esc(dayLabel(x))} · Wordle ${fmtN(puzzleOf(x))}</option>`).join("")}</select>
+</div>
+<div class="field"><span class="lbl" id="g-l">How many guesses?</span>
+<div class="gpick" role="group" aria-labelledby="g-l">${[1,2,3,4,5,6,7].map(v =>
+`<button class="gbtn ${v === 7 ? "x" : ""}" data-action="guess" data-v="${v}" aria-pressed="${g === v}" aria-label="${v === 7 ? "X, missed it" : v}">${v === 7 ? "X" : v}</button>`).join("")}</div>
+</div>
+${existing ? `<p class="note">You already logged ${Number(existing.guesses) >= 7 ? "X" : esc(existing.guesses)} for this one. Logging again replaces it. <button class="linkish" data-action="remove">Remove it</button></p>` : ""}
+<button class="btn" data-action="submit" ${canSubmit ? "" : "disabled"}>${state.saving ? "Saving…" : esc(submitText)}</button>
+</section>`;
+}
+function viewChampions(){
+const t = todayStr(), m = monthOf(t);
+const list = championsList();
+const rows = standings(m);
+const leaders = rows.filter(r => r.rank === 1);
+const live = `<div class="champ live">
+<span class="lbl">${esc(monthName(m, true))} · in progress</span>
+<p class="big">${leaders.length ? `${esc(joinNames(leaders.map(r => r.p.name)))} ${leaders.length > 1 ? "lead" : "leads"} with ${leaders[0].total}.` : "Up for grabs."}</p>
+<p class="sub">Crowned ${esc(monthName(nextMonth(m)))} 1</p>
+</div>`;
+const past = list.map(c => {
+const names = c.ids.map(pname);
+const verb = names.length > 1 ? "shared" : "took";
+const sub = [monthName(c.month, true)];
+if(c.total != null) sub.push(`${c.total} guesses`);
+if(c.runnerUp) sub.push(`${c.runnerUp.p.name} was ${c.runnerUp.total - c.total} back`);
+return `<div class="champ"><span class="lbl">${CROWN} Champion</span>
+<p class="big">${esc(joinNames(names))} ${verb} ${esc(monthName(c.month))}.</p>
+<p class="sub">${esc(sub.join(" · "))}</p></div>`;
+}).join("");
+const owner = "";
+return `${header()}${statusNote()}
+<section class="section"><h2>Champions wall</h2>
+<div class="board">${live}${past || `<p class="empty">No finished months yet. The first crown goes out ${esc(monthName(nextMonth(m)))} 1.</p>`}</div>
+</section>${owner}`;
+}
+function nextMonth(m){ const [y,mo] = m.split("-").map(Number); return new Date(Date.UTC(y, mo, 15)).toISOString().slice(0,7); }
+function viewPlayers(){
+const cards = playerList().map(p => {
+const st = playerStats(p.id), titles = titlesFor(p.id).length;
+return `<button class="pcard" data-action="profile" data-id="${esc(p.id)}">
+${nameTiles(p.name, titles ? "g" : "", )}
+<span class="stats"><span><b>${titles}</b> ${CROWN}</span><span><b>${st.avg == null ? "–" : st.avg.toFixed(2)}</b> avg</span><span><b>${st.games}</b> games</span></span>
+</button>`;
+}).join("");
+return `${header()}${statusNote()}
+<section class="section"><h2>Players</h2><div class="pgrid">${cards || '<p class="note">No players yet.</p>'}</div></section>
+<section class="card"><h2>Add a player</h2>
+<div class="inline"><input id="addname" type="text" maxlength="20" autocomplete="off" placeholder="Name" data-input="addname" value="${esc(state.addName)}" aria-label="New player name">
+<button class="btn small" data-action="addplayer" ${state.addName.trim() ? "" : "disabled"}>Add</button></div>
+</section>`;
+}
+function viewProfile(id){
+const p = state.players[id];
+if(!p) return `${header()}<button class="back" data-action="go" data-to="players">‹ Players</button><p class="note">${allLoaded() ? "That player isn't on the board." : "Loading…"}</p>`;
+const st = playerStats(id), titles = titlesFor(id);
+const max = Math.max(1, ...Object.values(st.dist));
+const topKey = Object.entries(st.dist).sort((a,b) => b[1]-a[1])[0];
+const m = monthOf(todayStr());
+const row = standings(m).find(r => r.p.id === id);
+const draft = state.emailDraft[id] ?? "";
+return `${header()}
+<button class="back" data-action="go" data-to="players">‹ Players</button>
+<section class="hero">${nameTiles(p.name, titles.length ? "g" : "")}
+<p class="lead-line">${titles.length ? `${titles.length}-time champion.` : "Still chasing a crown."}</p>
+<p class="lead-sub">${row ? `${row.total} guesses in ${esc(monthName(m))}, ranked ${row.rank}.` : `No ${esc(monthName(m))} scores yet.`}</p>
+</section>
+<section class="card"><div class="statrow">
+<div class="stat"><b>${titles.length}</b><span>Titles</span></div>
+<div class="stat"><b>${st.games}</b><span>Games</span></div>
+<div class="stat"><b>${st.avg == null ? "–" : st.avg.toFixed(2)}</b><span>Average</span></div>
+<div class="stat"><b>${st.streak}</b><span>Streak</span></div>
+</div></section>
+<section class="section"><h2>Guess distribution</h2>
+<div class="dist">${[1,2,3,4,5,6,7].map(k => {
+const c = st.dist[k], w = Math.max(6, Math.round(c / max * 100));
+return `<div class="bar"><span>${k === 7 ? "X" : k}</span><span class="fill ${c && topKey && Number(topKey[0]) === k ? "top" : ""}" style="width:${w}%">${c}</span></div>`;
+}).join("")}</div>
+${st.games ? "" : '<p class="note">Days carried in from the group chat count toward the month, not here.</p>'}
+</section>
+<section class="section"><h2>${CROWN} Months won</h2>
+${titles.length ? `<div class="chips">${titles.map(c => `<span class="pill done" style="font-size:12px;padding:6px 10px">${esc(monthName(c.month, true))}</span>`).join("")}</div>` : '<p class="note">None yet.</p>'}
+</section>
+<section class="card"><h2>8 PM reminder</h2>
+<p class="note">If ${esc(p.name)} hasn't logged by 8 PM Central, an email reminder goes out. ${p.remind ? "<strong>Reminders are on.</strong>" : "Reminders are off."}</p>
+<div class="field"><label for="email-${esc(id)}">Email</label>
+<input id="email-${esc(id)}" type="email" autocomplete="email" data-input="email" data-id="${esc(id)}" placeholder="${p.remind ? "Saved. Type a new one to change it" : "name@example.com"}" value="${esc(draft)}"></div>
+<div class="inline">
+<button class="btn small" data-action="remindon" data-id="${esc(id)}">${p.remind ? "Update email" : "Turn on reminders"}</button>
+${p.remind ? `<button class="btn ghost" data-action="remindoff" data-id="${esc(id)}">Turn off</button>` : ""}
+</div>
+</section>
+<button class="btn ghost" data-action="me" data-id="${esc(id)}" data-stay="1">${state.me === id ? "This phone logs as " + esc(p.name) : "This is me"}</button>`;
+}
+function renderTabs(cur){
+const tabs = [["board","Board"],["log","Log"],["champions","Champs"],["players","Players"]];
+const active = cur === "profile" ? "players" : cur;
+document.getElementById("tabs").innerHTML = tabs.map(([k,l]) =>
+`<button class="tab ${k === "log" ? "log" : ""}" data-action="go" data-to="${k}" ${k === active ? 'aria-current="page"' : ""}>${l}</button>`).join("");
+}
+function render(){
+const ae = document.activeElement;
+const focusId = ae && ae.id ? ae.id : null;
+const sel = focusId && "selectionStart" in ae ? [ae.selectionStart, ae.selectionEnd] : null;
+const r = route();
+let html;
+if(r.view === "log") html = viewLog();
+else if(r.view === "champions") html = viewChampions();
+else if(r.view === "players") html = viewPlayers();
+else if(r.view === "profile") html = viewProfile(r.id);
+else html = viewBoard();
+const app = document.getElementById("app");
+app.innerHTML = html;
+if(app.dataset.flipped) app.querySelectorAll(".t").forEach(el => el.style.animation = "none");
+app.dataset.flipped = "1";
+renderTabs(r.view);
+if(focusId){
+const el = document.getElementById(focusId);
+if(el){ el.focus({preventScroll:true}); if(sel && el.setSelectionRange){ try{ el.setSelectionRange(sel[0], sel[1]); }catch(e){} } }
+}
+}
+function toast(msg){
+const host = document.getElementById("toast-host");
+host.innerHTML = `<div class="toast" role="status">${esc(msg)}</div>`;
+clearTimeout(toast._t);
+toast._t = setTimeout(() => { host.innerHTML = ""; }, 2600);
+}
+function writeFailed(e){
+const msg = e && e.message ? String(e.message).replace(/^Exception:\s*/,"") : "";
+toast(msg && msg.length < 120 ? msg : "That didn't save. Check your connection and try again.");
+}
+/* ---------- Actions ---------- */
+async function call(fn){
+const args = Array.prototype.slice.call(arguments, 1);
+let r, j = null;
+try{ r = await fetch("/api/" + fn, {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({args})}); }
+catch(e){ throw new Error(""); }
+try{ j = await r.json(); }catch(e){}
+if(!r.ok || !j) throw new Error((j && j.error) || "");
+return j;
+}
+async function submitScore(){
+const me = state.me, d = state.form.date, g = state.form.guesses;
+const talk = state.form.talk.trim().slice(0, TALK_MAX);
+if(!state.ready || !me || !d || (g == null && !talk)) return;
+const n = puzzleOf(d);
+state.saving = true; render();
+try{
+if(g != null) apply(await call("saveScore", me, d, g, talk));
+else apply(await call("saveTalk", me, talk));
+const name = pname(me);
+state.form.guesses = null; state.form.talk = "";
+toast(g != null ? `${name}'s ${g >= 7 ? "X" : g} is in for Wordle ${fmtN(n)}.${talk ? " Trash talk posted." : ""}` : "Trash talk posted. No take-backs.");
+state.saving = false;
+go("board");
+}catch(e){ state.saving = false; writeFailed(e); render(); }
+}
+async function removeScore(){
+const me = state.me, d = state.form.date;
+if(!state.ready || !me || !d) return;
+try{ apply(await call("removeScore", me, d)); toast("Removed."); }
+catch(e){ writeFailed(e); }
+render();
+}
+async function addPlayer(){
+const name = state.addName.trim().slice(0,20);
+if(!state.ready || !name) return;
+try{ apply(await call("addPlayer", name)); state.addName = ""; toast(name + " is in the war."); }
+catch(e){ writeFailed(e); }
+render();
+}
+async function setReminder(id, on){
+const p = state.players[id]; if(!state.ready || !p) return;
+const draft = (state.emailDraft[id] || "").trim();
+const ok = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+if(on && !p.remind && !ok(draft)){ toast("Enter an email address first."); return; }
+if(on && p.remind && !draft){ toast("Type the new email address first."); return; }
+if(draft && !ok(draft)){ toast("That email address doesn't look right."); return; }
+try{ apply(await call("setReminder", id, on, on ? draft : "")); state.emailDraft[id] = ""; toast(on ? "Reminders on. Check spam for the first one." : "Reminders off."); }
+catch(e){ writeFailed(e); }
+render();
+}
+function apply(data){
+if(!data) return;
+const o = {}; (data.players || []).forEach(p => o[p.id] = p); state.players = o;
+state.scores = data.scores || [];
+state.adj = data.adj || [];
+state.talk = data.talk || [];
+const c = {}; (data.champs || []).forEach(x => c[x.id] = x); state.champs = c;
+Object.keys(state.loaded).forEach(k => state.loaded[k] = true);
+state.ready = true; state.error = null; state.stale = false;
+}
+document.addEventListener("click", e => {
+const b = e.target.closest("[data-action]"); if(!b || b.disabled) return;
+const a = b.dataset.action;
+if(a === "go") go(b.dataset.to);
+else if(a === "profile") go("player-" + b.dataset.id);
+else if(a === "me"){ state.me = b.dataset.id; store("ww_me", state.me); if(b.dataset.stay) toast("This phone logs as " + pname(state.me) + "."); render(); }
+else if(a === "guess"){ state.form.guesses = Number(b.dataset.v); render(); }
+else if(a === "submit") submitScore();
+else if(a === "remove") removeScore();
+else if(a === "addplayer") addPlayer();
+else if(a === "remindon") setReminder(b.dataset.id, true);
+else if(a === "remindoff") setReminder(b.dataset.id, false);
+});
+document.addEventListener("input", e => {
+const el = e.target, k = el.dataset && el.dataset.input; if(!k) return;
+if(k === "talk"){
+const had = !!state.form.talk.trim(); state.form.talk = el.value;
+const c = document.getElementById("talk-count"); if(c) c.textContent = el.value.length + "/" + TALK_MAX;
+if(had !== !!el.value.trim()) render();
+}
+else if(k === "addname"){ const had = !!state.addName.trim(); state.addName = el.value; if(had !== !!el.value.trim()) render(); }
+else if(k === "email"){ state.emailDraft[el.dataset.id] = el.value; }
+else if(k === "ctotal"){ state.champForm.total = el.value; }
+});
+document.addEventListener("change", e => {
+const el = e.target, k = el.dataset && el.dataset.input; if(!k) return;
+if(k === "date"){ state.form.date = el.value; render(); }
+else if(k === "cmonth"){ state.champForm.month = el.value; }
+else if(k === "cplayer"){ state.champForm.player = el.value; render(); }
+});
+document.addEventListener("keydown", e => {
+if(e.key === "Enter" && e.target.id === "addname"){ e.preventDefault(); addPlayer(); }
+});
+/* ---------- Boot ---------- */
+render();
+async function refresh(){
+if(state.saving) return;
+try{ apply(await call("getData")); }
+catch(e){ if(!state.ready) state.error = true; }
+render();
+}
+refresh();
+setInterval(() => { if(document.visibilityState === "visible") refresh(); }, 30000);
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") refresh(); });
+// The home-screen app can sit open for days: after 30 minutes away, reload so it runs the newest page.
+let hiddenAt = 0;
+document.addEventListener("visibilitychange", () => {
+if(document.visibilityState === "hidden") hiddenAt = Date.now();
+else if(hiddenAt && Date.now() - hiddenAt > 30*60000 && !state.saving) location.reload();
+});
+})();
+</script>
+</body>
+</html>
