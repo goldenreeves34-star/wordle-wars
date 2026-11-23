@@ -35,7 +35,8 @@ async function playerExists(db, id) {
 }
 function talkStmt(db, player, date, text) {
   const at = new Date().toISOString();
-  return db.prepare("INSERT INTO talk (id, player, date, puzzle, text, at) VALUES (?, ?, ?, ?, ?, ?)")
+  // OR IGNORE: a double tap in the same millisecond must not roll back the score saved with it.
+  return db.prepare("INSERT OR IGNORE INTO talk (id, player, date, puzzle, text, at) VALUES (?, ?, ?, ?, ?, ?)")
     .bind(at + "_" + player, player, date, puzzleOf(date), text, at);
 }
 
@@ -138,6 +139,9 @@ async function fetchSheet(env) {
 }
 
 async function importSheet(db, env) {
+  // One-time copy from the old sheet. Once the site is live it would wipe newer scores, so it refuses.
+  if ((await db.prepare("SELECT count(*) AS n FROM history WHERE by = 'website'").first()).n)
+    throw new Oops("The database is live; importing from the frozen sheet would erase newer scores.");
   const { tabs } = await fetchSheet(env);
   const num = v => (v === "" || v == null ? null : Number(v));
   const steps = ["players", "scores", "adjustments", "champions", "talk"].map(t => db.prepare("DELETE FROM " + t));
@@ -179,7 +183,7 @@ export async function onRequest({ request, env, params }) {
       if (path === "admin/compare" && request.method === "GET") return json(await compare(env.DB, env));
       return json({ error: "Not found." }, 404);
     }
-    const fn = ACTIONS[path];
+    const fn = Object.hasOwn(ACTIONS, path) ? ACTIONS[path] : null;
     if (!fn || request.method !== "POST") return json({ error: "Not found." }, 404);
     const body = await request.json().catch(() => ({}));
     return json(await fn(env.DB, ...(Array.isArray(body.args) ? body.args : [])));
