@@ -7,4 +7,4 @@ compatibility_date = "2026-11-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "wordle-wars"
-database_id = "REPLACE_WITH_D1_ID"
+database_id = "e81dc4c2-482c-447a-bdf9-ed25f83adfa2"
