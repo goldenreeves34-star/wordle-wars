@@ -20,6 +20,17 @@ Our own Wordle inside the app. Anyone can play as many practice games as they li
 - **Answers stay on the server.** `practiceStart` picks a word and stores it in the `practice` table; `practiceGuess` checks a guess and returns only the colors (g right spot, y elsewhere, x not in it); the answer is sent back only when the game ends. `practiceGet` restores a game after a reload. Games older than 2 days are deleted when a new one starts.
 - **Word lists:** `lib/words.js` (server only, never in `public/`). `ANSWERS` (about 1,600) is the public Wordle list filtered to words most US adults know and use today: common in modern spoken English (OpenSubtitles frequency), then hand-checked; no names, slang, plurals, archaic or vulgar words. `ALLOWED` (about 14,900) is every word accepted as a guess. To add or drop an answer, edit the `ANSWERS` string.
 
+## Accounts and today's Wordle (since Nov 25, 2026)
+
+- **The new way vs the old way.** Old way: typing your guess count on the Log tab. New way: playing today's Wordle on the Play tab, which logs the score itself. Nov 25 to 30 is a test run of the new way: its games live in the `daily` table and show as a separate "New way test run" board with no crown, while the old way still decides November. From Dec 1 (`CUTOVER` in both `functions/api/[[path]].js` and `public/index.html`) a finished game is also written into `scores`, so the normal board, champions and recap use it, and the old Log tab refuses any day from Dec 1 on (it stays open on Dec 1 only so Nov 30 can still be logged, then disappears and Play takes its green spot).
+- **Sign-in:** email code (sent by Resend from noreply@reevesrestorations.com; secret `RESEND_API_KEY` in the Pages dashboard) or Continue with Google (`GOOGLE_CLIENT_ID` in `wrangler.toml`, the "Wordle Wars site" client in the Google Cloud project "Wordle Wars", id local-tracker-515816-f0, published to production). A session is a year-long HttpOnly cookie; only its SHA-256 is stored (`sessions`). Codes are hashed, last 10 minutes, 5 tries, one a minute per email and 10 an hour per network (`codes`).
+- **Approval:** a new account (`accounts`) is pending until Golden approves it. An email that matches a player's reminder email links to that player automatically; goldenreeves34@gmail.com is the admin. Pending accounts can play practice but not today's Wordle.
+- **Admin page** (Play tab, "Admin", Golden only): approve an account as an existing player (keeps their history) or a new player, or deny/kick. A kick blocks that email for good and wipes that player's scores, games, trash talk and row.
+- **Today's word:** a fixed shuffle of `ANSWERS` seeded by the secret `WW_KEY`, one word per day starting Nov 25, no repeats until the list runs out (about 4.4 years). Editing `ANSWERS` or changing `WW_KEY` reshuffles the days after that change. Practice never hands out any of the next 30 days' words.
+- **Anti-cheat:** the answer never leaves the server until the game ends; a guess only counts if nothing else wrote to that game in between, so firing many guesses at once can't reveal extra colors.
+- **Trash talk** from Dec 1 is posted on the Board by signed-in players (`talkPost`).
+- `public/privacy.html` is the privacy page Google's sign-in setup links to.
+
 ## Changing things
 
 - Adding a past champion: insert a row into `champions` (month `yyyy-mm`, players as a comma list of ids, total) in the D1 console.

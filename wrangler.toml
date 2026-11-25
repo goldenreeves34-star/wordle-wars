@@ -8,3 +8,8 @@ compatibility_date = "2026-11-01"
 binding = "DB"
 database_name = "wordle-wars"
 database_id = "e81dc4c2-482c-447a-bdf9-ed25f83adfa2"
+
+# Public settings (not secrets). GOOGLE_CLIENT_ID: the "Wordle Wars site" web client in the Google Cloud project "Wordle Wars" (local-tracker-515816-f0).
+# Secret set in the dashboard, never here: RESEND_API_KEY (sends the sign-in code emails from noreply@reevesrestorations.com).
+[vars]
+GOOGLE_CLIENT_ID = "205546949895-d7eilghfngkf2o654cfg22rbri2o1b7v.apps.googleusercontent.com"

@@ -48,6 +48,45 @@ CREATE TABLE IF NOT EXISTS practice (
   guesses TEXT NOT NULL DEFAULT '',  -- comma list of guesses so far
   at TEXT NOT NULL                   -- when the game started (ISO)
 );
+-- Sign-in accounts (Nov 25, 2026). status: pending (waiting for Golden), approved, kicked (can't sign in again).
+-- player: the players.id this account plays as ('' until Golden links or approves it).
+CREATE TABLE IF NOT EXISTS accounts (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL DEFAULT '',
+  player TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending',
+  created TEXT NOT NULL
+);
+-- Signed-in phones. token is the SHA-256 of the cookie value, never the value itself.
+CREATE TABLE IF NOT EXISTS sessions (
+  token TEXT PRIMARY KEY,
+  account TEXT NOT NULL,
+  expires TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS sessions_account ON sessions(account);
+-- Email sign-in codes (hashed), kept a day for rate limits.
+CREATE TABLE IF NOT EXISTS codes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT NOT NULL,
+  ip TEXT NOT NULL DEFAULT '',
+  code_hash TEXT NOT NULL,
+  at TEXT NOT NULL,
+  tries INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS codes_email ON codes(email, at);
+-- Today's Wordle games, one row per player per day. score: guesses to win, 7 for a miss, NULL while playing.
+-- Nov 25 to 30 rows are the test run (no crown); from Dec 1 a finished game is also written into scores.
+CREATE TABLE IF NOT EXISTS daily (
+  id TEXT PRIMARY KEY,               -- "<date>_<player>"
+  player TEXT NOT NULL,
+  account TEXT NOT NULL,
+  date TEXT NOT NULL,
+  guesses TEXT NOT NULL DEFAULT '',
+  score INTEGER,
+  at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS daily_date ON daily(date);
 -- Every change and who made it ("website", "import", "chat").
 CREATE TABLE IF NOT EXISTS history (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

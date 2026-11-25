@@ -256,6 +256,10 @@ if(names.length === 2) return names[0] + " and " + names[1];
 return names.slice(0,-1).join(", ") + " and " + names[names.length-1];
 }
 const TALK_MAX = 200;
+// The new way: today's Wordle logs its own score. Nov 25 to 30 is a test run with no crown; from Dec 1 it decides the month.
+const TRIAL_START = "2026-11-25", CUTOVER = "2026-12-01";
+function newWay(){ return todayStr() >= CUTOVER; }
+function myPlayer(){ const a = state.acct; return a && a.signedIn && a.status === "approved" && a.player ? a.player : null; }
 const CROWN = '<svg class="crown" viewBox="0 0 16 12" aria-hidden="true"><path fill="currentColor" d="M1 11h14l-1-8-3.5 3L8 1 5.5 6 2 3z"/></svg>';
 /* ---------- State ---------- */
 const state = {
@@ -264,6 +268,7 @@ players:{}, scores:[], adj:[], champs:{}, talk:[],
 loaded:{players:false, scores:false, adjustments:false, champions:false},
 stale:false, error:null,
 game:null,
+acct:null, auth:{email:"", code:"", sent:false, busy:false}, newName:"", daily:null, trial:[], admin:null, kickArm:null, talkDraft:"",
 me: recall("ww_me"),
 form:{date:null, guesses:null, talk:""},
 addName:"", emailDraft:{}, champForm:{month:"", player:"", total:""},
@@ -339,6 +344,7 @@ function route(){ return state.view === "profile" ? {view:"profile", id:state.pr
 function go(h){
 if(h.startsWith("player-")){ state.view = "profile"; state.profileId = h.slice(7); }
 else state.view = h;
+if(h === "admin"){ state.kickArm = null; loadAdmin(); }
 render(); window.scrollTo(0,0);
 }
 /* ---------- Rendering ---------- */
@@ -438,14 +444,41 @@ return `${header()}${statusNote()}
 <section class="card">
 <div class="section"><h2>Wordle ${fmtN(n)} · today</h2>
 <div class="today-list">${todayChips || '<span class="note">No players yet.</span>'}</div></div>
-<button class="btn" data-action="go" data-to="log">${waiting ? "Log today's score" : "Everyone's in. Change a score"}</button>
+${newWay() ? `<button class="btn" data-action="go" data-to="play">Play today's Wordle</button>` : `<button class="btn" data-action="go" data-to="log">${waiting ? "Log today's score" : "Everyone's in. Change a score"}</button>`}
 </section>
+${trialBoard()}
 ${talkFeed()}
-<section class="rules">
+<section class="rules">${newWay() ? `
+<p>Play today's Wordle on the Play tab and your score logs itself. Lowest total guesses for the month wins. An X counts as 7.</p>
+<p>Once a day ends, a day you didn't play counts as 7.</p>
+<p>The board resets on the 1st and the winner goes on the Champions wall.</p>` : `
 <p>Lowest total guesses for the month wins. An X counts as 7.</p>
 <p>Once a day ends, a day you didn't log counts as 7, so log late if you forget. You can fill in any day this month.</p>
-<p>The board resets on the 1st and the winner goes on the Champions wall. Scout's honor.</p>
+<p>The board resets on the 1st and the winner goes on the Champions wall. Scout's honor.</p>`}
 </section>`;
+}
+/* The new way's test run (Nov 25 to 30): our own Wordle, scored automatically, no crown. */
+function trialBoard(){
+const t = todayStr();
+if(t >= CUTOVER) return "";
+const dates = []; for(let d = TRIAL_START; d <= t; d = addDays(d, 1)) dates.push(d);
+const rows = [];
+for(const p of playerList()){
+const mine = {}; state.trial.forEach(x => { if(x.player === p.id) mine[x.date] = Number(x.guesses); });
+if(!Object.keys(mine).length) continue;
+let total = 0; dates.forEach(d => { if(mine[d] != null) total += mine[d]; else if(d < t) total += 7; });
+rows.push({p, total, today: mine[t]});
+}
+rows.sort((a,b) => a.total - b.total || String(a.p.name).localeCompare(String(b.p.name)));
+let rank = 0, prev = null; rows.forEach((r,i) => { if(r.total !== prev){ rank = i+1; prev = r.total; } r.rank = rank; });
+const list = rows.length ? `<div class="board" role="list">${rows.map(r => `<div class="row" role="listitem" style="cursor:default">
+<span class="rank">${r.rank}</span>
+<span class="who">${nameTiles(r.p.name, r.rank === 1 ? "g" : "")}<span class="meta">${r.today != null ? `<span class="pill done">Today ${r.today >= 7 ? "X" : r.today}</span>` : `<span class="pill">Today: not yet</span>`}</span></span>
+<span class="total">${r.total}<small>guesses</small></span></div>`).join("")}</div>`
+: `<div class="board"><p class="empty">Nobody has played today's Wordle yet. It's on the Play tab.</p></div>`;
+return `<section class="section"><h2>New way test run · Nov 25 to 30</h2>${list}
+<p class="note">Our own Wordle on the Play tab, scored automatically. Just a test run, no crown: the old way decides November. Starting December 1 the new way is the only way.</p>
+<button class="btn ghost" data-action="go" data-to="play">Play today's Wordle</button></section>`;
 }
 function timeAgo(iso){
 const t = Date.parse(iso); if(!t) return "";
@@ -467,7 +500,9 @@ return `<div class="tmsg">
 <p class="tbody">${esc(x.text)}</p></div>`;
 }).join("") : `<p class="empty">Quiet in here. Somebody talk some trash.</p>`;
 return `<section class="section"><h2>Trash talk</h2><div class="talk">${body}</div>
-<button class="btn ghost" data-action="go" data-to="log">Talk some trash</button></section>`;
+${!newWay() ? `<button class="btn ghost" data-action="go" data-to="log">Talk some trash</button>` : myPlayer() ? `<div class="card">
+<textarea id="talkpost" data-input="talkdraft" maxlength="${TALK_MAX}" aria-label="Trash talk" placeholder="Say it to their face.">${esc(state.talkDraft)}</textarea>
+<button class="btn small" data-action="talkpost" ${state.talkDraft.trim() ? "" : "disabled"}>Post it</button></div>` : `<p class="note">Sign in on the Play tab to talk trash.</p>`}</section>`;
 }
 function allowedDates(){
 const t = todayStr();
@@ -475,14 +510,15 @@ const first = monthOf(t) + "-01";
 const y = addDays(t, -1);
 const start = y < first ? y : first;
 const out = [];
-for(let d = t; d >= start; d = addDays(d, -1)) out.push(d);
+for(let d = t; d >= start; d = addDays(d, -1)) if(d < CUTOVER) out.push(d);
 return out;
 }
 function viewLog(){
 const t = todayStr();
 const players = playerList();
 const dates = allowedDates();
-if(!state.form.date || !dates.includes(state.form.date)) state.form.date = t;
+if(!dates.length) return `${header()}<section class="card"><p class="note">Scores log themselves now. Play today's Wordle on the Play tab.</p></section>`;
+if(!state.form.date || !dates.includes(state.form.date)) state.form.date = dates[0];
 const me = state.me && state.players[state.me] ? state.me : null;
 const d = state.form.date, n = puzzleOf(d), g = state.form.guesses;
 const existing = me ? state.scores.find(s => s.player === me && s.date === d) : null;
@@ -523,12 +559,7 @@ return out;
 }
 function viewPlay(){
 const g = state.game;
-if(!g) return `<section class="section"><h2>Play</h2></section>
-<section class="card">
-<button class="btn ghost" disabled>Today's Wordle starts December 1</button>
-<button class="btn" data-action="practice">Practice Wordle</button>
-<p class="note">Practice is unlimited and never counts toward the board. Play as many as you like.</p>
-</section>`;
+if(!g) return playMenu();
 const grid = Array.from({length:6}, (_,i) => {
 const r = g.rows[i], typing = !r && i === g.rows.length && g.status === "playing";
 const letters = r ? r.w : typing ? g.cur : "", mk = r ? r.m : "";
@@ -544,16 +575,110 @@ const key = (k, label, extra) => `<button class="k ${extra || ""} ${ks[k] || ""}
 const kb = KEYROWS.map((row,i) => `<div class="kr">${i === 2 ? key("enter","Enter","wide") : ""}${[...row].map(c => key(c,c)).join("")}${i === 2 ? key("back","⌫","wide bk") : ""}</div>`).join("");
 const done = g.status !== "playing";
 const msg = g.status === "won" ? `Got it in ${g.rows.length}.` : g.status === "lost" ? `The word was ${esc(String(g.answer).toUpperCase())}.` : "";
-return `<section class="section"><div class="inline" style="justify-content:space-between"><h2>Practice Wordle</h2><button class="linkish" data-action="playmenu">‹ Menu</button></div></section>
+return `<section class="section"><div class="inline" style="justify-content:space-between"><h2>${g.mode === "daily" ? "Today's Wordle" : "Practice Wordle"}</h2><button class="linkish" data-action="playmenu">‹ Menu</button></div></section>
 <div class="gboard" aria-live="polite">${grid}</div>
-${done ? `<p class="result">${msg}</p><button class="btn" data-action="practice">Play another</button>` : ""}
+${done ? `<p class="result">${msg}</p>${g.mode === "daily" ? `<p class="note" style="text-align:center">${newWay() ? "Your score is on the board." : "Logged on the test-run board."} Back tomorrow for a new one.</p><button class="btn" data-action="go" data-to="board">See the board</button><button class="btn ghost" data-action="practice">Practice Wordle</button>` : `<button class="btn" data-action="practice">Play another</button>`}` : ""}
 <div class="kb">${kb}</div>`;
+}
+function playMenu(){
+const a = state.acct;
+let daily;
+if(!a) daily = `<p class="note">Loading…</p>`;
+else if(!a.signedIn) daily = `<p class="note">Sign in to play today's Wordle. Your score logs itself, one game a day. Practice is open to everyone.</p>
+${a.googleClientId ? `<div id="gbtn" style="min-height:44px; display:flex; justify-content:center"></div><p class="note" style="text-align:center">or get a code by email</p>` : ""}
+${state.auth.sent ? `<div class="field"><label for="authcode">Code sent to ${esc(state.auth.email)}</label>
+<input id="authcode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" data-input="authcode" value="${esc(state.auth.code)}" placeholder="6-digit code"></div>
+<button class="btn" data-action="checkcode" ${state.auth.busy || state.auth.code.length !== 6 ? "disabled" : ""}>${state.auth.busy ? "Checking…" : "Sign in"}</button>
+<button class="linkish" data-action="authback">Use a different email</button>`
+: `<div class="field"><label for="authemail">Email</label>
+<input id="authemail" type="email" autocomplete="email" data-input="authemail" value="${esc(state.auth.email)}" placeholder="name@example.com"></div>
+<button class="btn ${a.googleClientId ? "ghost" : ""}" data-action="sendcode" ${state.auth.busy ? "disabled" : ""}>${state.auth.busy ? "Sending…" : "Email me a code"}</button>`}`;
+else if(a.status !== "approved" || !a.player){
+daily = a.status === "approved"
+? `<p class="note">You're signed in. Link your account to a player in Admin to play today's Wordle.</p>`
+: !a.name ? `<div class="field"><label for="newname">What name should the board show?</label>
+<input id="newname" type="text" maxlength="20" autocomplete="nickname" data-input="newname" value="${esc(state.newName)}" placeholder="Name"></div>
+<button class="btn" data-action="setname" ${state.newName.trim() ? "" : "disabled"}>Save</button>`
+: `<p class="note">Thanks, ${esc(a.name)}. Golden still needs to approve you before today's Wordle counts. Practice is open in the meantime.</p>`;
+} else {
+const d = state.daily;
+daily = !d ? `<p class="note">Loading today's Wordle…</p>`
+: d.status !== "playing" ? `<p class="note">You finished today's Wordle ${d.status === "won" ? "in " + d.rows.length : "with an X"}. A new one comes at midnight.</p><button class="btn ghost" data-action="daily">See your game</button>`
+: `<button class="btn" data-action="daily">${d.rows.length ? "Keep playing today's Wordle" : "Play today's Wordle"}</button>`;
+if(!newWay()) daily += `<p class="note">Test run through Nov 30. It doesn't count toward the November crown.</p>`;
+}
+return `<section class="section"><h2>Play</h2></section>
+<section class="card"><h2>Today's Wordle</h2>${daily}</section>
+<section class="card">
+<button class="btn" data-action="practice">Practice Wordle</button>
+<p class="note">Practice is unlimited and never counts toward the board. Play as many as you like.</p>
+</section>
+${a && a.signedIn ? `<p class="note">Signed in as ${esc(a.name || a.email)} (${esc(a.email)}). <button class="linkish" data-action="signout">Sign out</button>${a.admin ? ` · <button class="linkish" data-action="go" data-to="admin">Admin</button>` : ""}</p>` : ""}`;
+}
+/* ---------- Golden's admin page: approve new accounts, link them to players, kick people ---------- */
+function viewAdmin(){
+const d = state.admin;
+if(!state.acct || !state.acct.admin) return `${header()}<p class="note">Only Golden can see this.</p>`;
+if(!d) return `${header()}<p class="note">Loading…</p>`;
+const linked = new Set(d.accounts.filter(x => x.player).map(x => x.player));
+const free = d.players.filter(p => !linked.has(p.id));
+const row = x => {
+const pending = x.status !== "approved" || !x.player;
+const sel = pending ? `<div class="field"><label for="ap-${esc(x.id)}">Plays as</label><select id="ap-${esc(x.id)}">
+<option value="">New player: ${esc(x.name || x.email.split("@")[0])}</option>${free.map(p => `<option value="${esc(p.id)}">${esc(p.name)} (keeps their scores)</option>`).join("")}</select></div>
+<button class="btn small" data-action="approve" data-id="${esc(x.id)}">Approve</button>` : `<p class="note">Plays as ${esc(pname(x.player))}</p>`;
+const kick = x.email === state.acct.email ? "" : state.kickArm === x.id
+? `<button class="btn small" style="background:var(--miss)" data-action="kick" data-id="${esc(x.id)}">Tap again: kick and wipe their scores</button>`
+: `<button class="btn ghost small" data-action="kickarm" data-id="${esc(x.id)}">${pending ? "Deny" : "Kick"}</button>`;
+return `<div class="tmsg"><div class="thead"><strong style="color:var(--ink); font-size:15px">${esc(x.name || "(no name yet)")}</strong><span>${esc(x.email)}</span></div>${sel}${kick}</div>`;
+};
+const waiting = d.accounts.filter(x => x.status !== "approved" || !x.player), ok = d.accounts.filter(x => x.status === "approved" && x.player);
+return `${header()}<button class="back" data-action="go" data-to="play">‹ Play</button>
+<section class="section"><h2>Waiting for you</h2><div class="talk">${waiting.map(row).join("") || '<p class="empty">Nobody waiting.</p>'}</div></section>
+<section class="section"><h2>Approved</h2><div class="talk">${ok.map(row).join("") || '<p class="empty">Nobody yet.</p>'}</div></section>
+<p class="note">A kick wipes that player's scores, games and trash talk, and that email can't sign in again.</p>`;
+}
+async function loadMe(){
+try{ state.acct = await call("me"); }catch(e){ state.acct = {signedIn:false}; }
+await loadDaily(); render();
+}
+async function loadDaily(){
+if(!myPlayer()){ state.daily = null; return; }
+try{ state.daily = await call("dailyGet"); }catch(e){}
+}
+async function signedIn(me){
+state.acct = me; state.auth = {email:"", code:"", sent:false, busy:false};
+await loadDaily(); refresh();
+toast(me.status === "approved" ? "Signed in." : "Signed in. Golden will approve you soon.");
+render();
+}
+let gLoaded = false;
+function mountGoogle(){
+const el = document.getElementById("gbtn"), a = state.acct;
+if(!el || !a || !a.googleClientId || el.childElementCount) return;
+const go2 = () => {
+google.accounts.id.initialize({client_id:a.googleClientId, callback: async r => {
+try{ await signedIn(await call("authGoogle", r.credential)); }catch(e){ writeFailed(e); }
+}});
+google.accounts.id.renderButton(el, {theme: matchMedia("(prefers-color-scheme: dark)").matches ? "filled_black" : "outline", size:"large", text:"continue_with", shape:"pill", width:280});
+};
+if(window.google && google.accounts) return go2();
+if(gLoaded) return;
+gLoaded = true;
+const s = document.createElement("script"); s.src = "https://accounts.google.com/gsi/client"; s.async = true;
+s.onload = () => { const e2 = document.getElementById("gbtn"); if(e2 && !e2.childElementCount) go2(); };
+document.head.appendChild(s);
+}
+async function startDaily(){
+const d = state.daily; if(!d) return;
+state.game = {mode:"daily", rows:d.rows, cur:"", status:d.status, answer:d.answer || null, busy:false, anim:null, shake:false};
+render();
 }
 async function startPractice(){
 state.view = "play"; state.game = null; render();
 try{
 const r = await call("practiceStart");
-state.game = {id:r.id, rows:[], cur:"", status:"playing", answer:null, busy:false, anim:null, shake:false};
+state.game = {mode:"practice", id:r.id, rows:[], cur:"", status:"playing", answer:null, busy:false, anim:null, shake:false};
 store("ww_practice", r.id);
 }catch(e){ writeFailed(e); }
 render();
@@ -563,7 +688,7 @@ const id = recall("ww_practice"); if(!id) return;
 try{
 const r = await call("practiceGet", id);
 if(r.status !== "playing"){ store("ww_practice", null); return; }
-state.game = {id, rows:r.rows, cur:"", status:r.status, answer:null, busy:false, anim:null, shake:false};
+state.game = {mode:"practice", id, rows:r.rows, cur:"", status:r.status, answer:null, busy:false, anim:null, shake:false};
 render();
 }catch(e){ store("ww_practice", null); }
 }
@@ -572,11 +697,12 @@ const g = state.game;
 if(!g || g.busy || g.anim != null || g.status !== "playing" || g.cur.length !== 5) return;
 g.busy = true;
 try{
-const r = await call("practiceGuess", g.id, g.cur);
+const r = g.mode === "daily" ? await call("dailyGuess", g.cur) : await call("practiceGuess", g.id, g.cur);
 g.rows.push({w:g.cur, m:r.marks}); g.cur = ""; g.status = r.status; if(r.answer) g.answer = r.answer;
 g.anim = g.rows.length - 1;
 setTimeout(() => { g.anim = null; if(state.game === g) render(); }, 1600);
-if(r.status !== "playing") store("ww_practice", null);
+if(g.mode === "daily"){ state.daily = {rows:g.rows, status:g.status, answer:g.answer}; if(r.status !== "playing") refresh(); }
+else if(r.status !== "playing") store("ww_practice", null);
 }catch(e){
 writeFailed(e); g.shake = true;
 setTimeout(() => { g.shake = false; }, 500);
@@ -673,13 +799,17 @@ ${titles.length ? `<div class="chips">${titles.map(c => `<span class="pill done"
 ${p.remind ? `<button class="btn ghost" data-action="remindoff" data-id="${esc(id)}">Turn off</button>` : ""}
 </div>
 </section>
-<button class="btn ghost" data-action="me" data-id="${esc(id)}" data-stay="1">${state.me === id ? "This phone logs as " + esc(p.name) : "This is me"}</button>`;
+${newWay() ? "" : `<button class="btn ghost" data-action="me" data-id="${esc(id)}" data-stay="1">${state.me === id ? "This phone logs as " + esc(p.name) : "This is me"}</button>`}`;
 }
 function renderTabs(cur){
-const tabs = [["board","Board"],["play","Play"],["log","Log"],["champions","Champs"],["players","Players"]];
-const active = cur === "profile" ? "players" : cur;
+// The Log tab stays only while there's an old-way day left to log (through Dec 1, for Nov 30). Then Play takes the green spot.
+const logOpen = allowedDates().length > 0;
+const tabs = logOpen ? [["board","Board"],["play","Play"],["log","Log"],["champions","Champs"],["players","Players"]] : [["board","Board"],["play","Play"],["champions","Champs"],["players","Players"]];
+const green = logOpen ? "log" : "play";
+document.getElementById("tabs").style.gridTemplateColumns = "repeat(" + tabs.length + ",1fr)";
+const active = cur === "profile" ? "players" : cur === "admin" ? "play" : cur;
 document.getElementById("tabs").innerHTML = tabs.map(([k,l]) =>
-`<button class="tab ${k === "log" ? "log" : ""}" data-action="go" data-to="${k}" ${k === active ? 'aria-current="page"' : ""}>${l}</button>`).join("");
+`<button class="tab ${k === green ? "log" : ""}" data-action="go" data-to="${k}" ${k === active ? 'aria-current="page"' : ""}>${l}</button>`).join("");
 }
 function render(){
 const ae = document.activeElement;
@@ -688,6 +818,7 @@ const sel = focusId && "selectionStart" in ae ? [ae.selectionStart, ae.selection
 const r = route();
 let html;
 if(r.view === "play") html = viewPlay();
+else if(r.view === "admin") html = viewAdmin();
 else if(r.view === "log") html = viewLog();
 else if(r.view === "champions") html = viewChampions();
 else if(r.view === "players") html = viewPlayers();
@@ -697,6 +828,7 @@ const app = document.getElementById("app");
 app.innerHTML = html;
 if(app.dataset.flipped) app.querySelectorAll(".t").forEach(el => el.style.animation = "none");
 app.dataset.flipped = "1";
+mountGoogle();
 renderTabs(r.view);
 if(focusId){
 const el = document.getElementById(focusId);
@@ -764,12 +896,55 @@ try{ apply(await call("setReminder", id, on, on ? draft : "")); state.emailDraft
 catch(e){ writeFailed(e); }
 render();
 }
+async function sendCode(){
+const email = state.auth.email.trim();
+if(state.auth.busy) return;
+if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ toast("That email address doesn't look right."); return; }
+state.auth.busy = true; render();
+try{ await call("authEmail", email); state.auth.sent = true; state.auth.code = ""; toast("Check your email for a 6-digit code."); }
+catch(e){ writeFailed(e); }
+state.auth.busy = false; render();
+const c = document.getElementById("authcode"); if(c) c.focus();
+}
+async function checkCode(){
+if(state.auth.busy || state.auth.code.length !== 6) return;
+state.auth.busy = true; render();
+try{ await signedIn(await call("authCode", state.auth.email.trim(), state.auth.code)); return; }
+catch(e){ writeFailed(e); }
+state.auth.busy = false; render();
+}
+async function setName(){
+const n = state.newName.trim(); if(!n) return;
+try{ state.acct = await call("setName", n); state.newName = ""; }catch(e){ writeFailed(e); }
+render();
+}
+async function signOut(){
+try{ state.acct = await call("logout"); }catch(e){ writeFailed(e); return; }
+state.daily = null; if(state.game && state.game.mode === "daily") state.game = null;
+if(window.google && google.accounts) google.accounts.id.disableAutoSelect();
+toast("Signed out."); render();
+}
+async function talkPost(){
+const text = state.talkDraft.trim().slice(0, TALK_MAX); if(!text) return;
+try{ apply(await call("talkPost", text)); state.talkDraft = ""; toast("Trash talk posted. No take-backs."); }catch(e){ writeFailed(e); }
+render();
+}
+async function loadAdmin(){
+try{ state.admin = await call("adminList"); }catch(e){ writeFailed(e); }
+render();
+}
+async function adminDo(fn, id, player){
+try{ state.admin = await call(fn, id, player); state.kickArm = null; toast(fn === "adminKick" ? "Kicked." : "Approved."); refresh(); }
+catch(e){ writeFailed(e); }
+render();
+}
 function apply(data){
 if(!data) return;
 const o = {}; (data.players || []).forEach(p => o[p.id] = p); state.players = o;
 state.scores = data.scores || [];
 state.adj = data.adj || [];
 state.talk = data.talk || [];
+state.trial = data.trial || [];
 const c = {}; (data.champs || []).forEach(x => c[x.id] = x); state.champs = c;
 Object.keys(state.loaded).forEach(k => state.loaded[k] = true);
 state.ready = true; state.error = null; state.stale = false;
@@ -782,6 +957,16 @@ else if(a === "profile") go("player-" + b.dataset.id);
 else if(a === "me"){ state.me = b.dataset.id; store("ww_me", state.me); if(b.dataset.stay) toast("This phone logs as " + pname(state.me) + "."); render(); }
 else if(a === "guess"){ state.form.guesses = Number(b.dataset.v); render(); }
 else if(a === "practice") startPractice();
+else if(a === "daily") startDaily();
+else if(a === "sendcode") sendCode();
+else if(a === "checkcode") checkCode();
+else if(a === "authback"){ state.auth = {email:state.auth.email, code:"", sent:false, busy:false}; render(); }
+else if(a === "setname") setName();
+else if(a === "signout") signOut();
+else if(a === "talkpost") talkPost();
+else if(a === "approve") adminDo("adminApprove", b.dataset.id, (document.getElementById("ap-" + b.dataset.id) || {}).value || "");
+else if(a === "kickarm"){ state.kickArm = b.dataset.id; render(); }
+else if(a === "kick") adminDo("adminKick", b.dataset.id);
 else if(a === "playmenu"){ state.game = null; store("ww_practice", null); render(); }
 else if(a === "key") pressKey(b.dataset.k);
 else if(a === "submit") submitScore();
@@ -797,6 +982,10 @@ const had = !!state.form.talk.trim(); state.form.talk = el.value;
 const c = document.getElementById("talk-count"); if(c) c.textContent = el.value.length + "/" + TALK_MAX;
 if(had !== !!el.value.trim()) render();
 }
+else if(k === "authemail"){ state.auth.email = el.value; }
+else if(k === "authcode"){ const had = state.auth.code.length === 6; state.auth.code = el.value.replace(/\D/g,"").slice(0,6); if(had !== (state.auth.code.length === 6)) render(); }
+else if(k === "newname"){ const had = !!state.newName.trim(); state.newName = el.value; if(had !== !!el.value.trim()) render(); }
+else if(k === "talkdraft"){ const had = !!state.talkDraft.trim(); state.talkDraft = el.value; if(had !== !!el.value.trim()) render(); }
 else if(k === "addname"){ const had = !!state.addName.trim(); state.addName = el.value; if(had !== !!el.value.trim()) render(); }
 else if(k === "email"){ state.emailDraft[el.dataset.id] = el.value; }
 else if(k === "ctotal"){ state.champForm.total = el.value; }
@@ -809,6 +998,8 @@ else if(k === "cplayer"){ state.champForm.player = el.value; render(); }
 });
 document.addEventListener("keydown", e => {
 if(e.key === "Enter" && e.target.id === "addname"){ e.preventDefault(); addPlayer(); return; }
+if(e.key === "Enter" && e.target.id === "authemail"){ e.preventDefault(); sendCode(); return; }
+if(e.key === "Enter" && e.target.id === "authcode"){ e.preventDefault(); checkCode(); return; }
 if(state.view !== "play" || e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
 const k = e.key === "Enter" ? "enter" : e.key === "Backspace" ? "back" : e.key.length === 1 ? e.key.toLowerCase() : "";
 if(k){ e.preventDefault(); pressKey(k); }
@@ -823,6 +1014,7 @@ render();
 }
 refresh();
 restorePractice();
+loadMe();
 setInterval(() => { if(document.visibilityState === "visible") refresh(); }, 30000);
 document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") refresh(); });
 // The home-screen app can sit open for days: after 30 minutes away, reload so it runs the newest page.
