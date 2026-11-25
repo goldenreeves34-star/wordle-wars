@@ -30,6 +30,7 @@
 --yellow:#c9b458;
 --miss:#c0563f;
 --on-tile:#ffffff;
+--key:#d3d6da; --key-miss:#787c7e;
 --display:"Libre Franklin","Helvetica Neue",Arial,sans-serif;
 --serif:"Instrument Serif",Georgia,"Times New Roman",serif;
 --body:"Libre Franklin","Helvetica Neue",Arial,sans-serif;
@@ -38,12 +39,14 @@ color-scheme:light;
 @media (prefers-color-scheme: dark){
 :root:not([data-theme="light"]){
 --paper:#121213; --card:#1b1b1d; --ink:#f1f1ef; --muted:#9c9ea0; --line:#3a3a3c;
+--key:#818384; --key-miss:#3a3a3c;
 --tile:#3a3a3c; --green:#538d4e; --yellow:#b59f3b; --miss:#c4604a; --on-tile:#ffffff;
 color-scheme:dark;
 }
 }
 :root[data-theme="dark"]{
 --paper:#121213; --card:#1b1b1d; --ink:#f1f1ef; --muted:#9c9ea0; --line:#3a3a3c;
+--key:#818384; --key-miss:#3a3a3c;
 --tile:#3a3a3c; --green:#538d4e; --yellow:#b59f3b; --miss:#c4604a; --on-tile:#ffffff;
 color-scheme:dark;
 }
@@ -187,9 +190,9 @@ text-transform:uppercase; color:var(--muted); border-radius:8px; position:relati
 @keyframes shake{20%,60%{transform:translateX(-6px)} 40%,80%{transform:translateX(6px)}}
 .kb{display:flex; flex-direction:column; gap:6px; width:100%; max-width:500px; margin:0 auto}
 .kr{display:flex; gap:5px; justify-content:center}
-.k{all:unset; cursor:pointer; flex:1; max-width:42px; height:54px; display:grid; place-items:center; background:var(--line); color:var(--ink); border-radius:5px; font:800 15px var(--body); text-transform:uppercase; user-select:none; -webkit-tap-highlight-color:transparent}
+.k{all:unset; cursor:pointer; flex:1; max-width:42px; height:54px; display:grid; place-items:center; background:var(--key); color:var(--ink); border-radius:5px; font:800 15px var(--body); text-transform:uppercase; user-select:none; -webkit-tap-highlight-color:transparent}
 .k.wide{max-width:60px; font-size:12px}
-.k.g{background:var(--green); color:#fff} .k.y{background:var(--yellow); color:#fff} .k.x{background:var(--tile); color:#fff}
+.k.g{background:var(--green); color:#fff} .k.y{background:var(--yellow); color:#fff} .k.x{background:var(--key-miss); color:#fff}
 .k:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
 .result{text-align:center; font:italic 400 30px/1.1 var(--serif); text-wrap:balance}
 .toast{position:fixed; left:50%; bottom:calc(96px + env(safe-area-inset-bottom)); transform:translateX(-50%);
