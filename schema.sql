@@ -41,6 +41,13 @@ CREATE TABLE IF NOT EXISTS talk (
   at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS talk_at ON talk(at);
+-- Practice Wordle games. The answer lives only here; the page only ever sees the colors. Rows older than 2 days are deleted when a new game starts.
+CREATE TABLE IF NOT EXISTS practice (
+  id TEXT PRIMARY KEY,               -- random game id
+  answer TEXT NOT NULL,
+  guesses TEXT NOT NULL DEFAULT '',  -- comma list of guesses so far
+  at TEXT NOT NULL                   -- when the game started (ISO)
+);
 -- Every change and who made it ("website", "import", "chat").
 CREATE TABLE IF NOT EXISTS history (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

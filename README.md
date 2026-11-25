@@ -13,6 +13,13 @@ The family's monthly Wordle competition: https://wordlewars.reevesrestorations.c
 - **Old sheet:** "ARCHIVED Wordle Wars Scores" in Drive, locked read-only. History only.
 - **CNAME:** left over from the GitHub Pages days so the old github.io link still forwards here.
 
+## Play tab: practice Wordle (since Nov 25, 2026)
+
+Our own Wordle inside the app. Anyone can play as many practice games as they like; practice never touches the scoreboard. "Today's Wordle" (the one game a day that counts) is coming December 1 with sign-in (email code and Google), a kick button for Golden, and approval for new accounts.
+
+- **Answers stay on the server.** `practiceStart` picks a word and stores it in the `practice` table; `practiceGuess` checks a guess and returns only the colors (g right spot, y elsewhere, x not in it); the answer is sent back only when the game ends. `practiceGet` restores a game after a reload. Games older than 2 days are deleted when a new one starts.
+- **Word lists:** `lib/words.js` (server only, never in `public/`). `ANSWERS` (about 1,600) is the public Wordle list filtered to words most US adults know and use today: common in modern spoken English (OpenSubtitles frequency), then hand-checked; no names, slang, plurals, archaic or vulgar words. `ALLOWED` (about 14,900) is every word accepted as a guess. To add or drop an answer, edit the `ANSWERS` string.
+
 ## Changing things
 
 - Adding a past champion: insert a row into `champions` (month `yyyy-mm`, players as a comma list of ids, total) in the D1 console.

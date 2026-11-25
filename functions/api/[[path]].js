@@ -1,8 +1,10 @@
 // Wordle Wars API: the page's calls, backed by the D1 database "wordle-wars" (binding DB).
-// POST /api/<fn> with {args:[...]}: getData, saveScore, saveTalk, removeScore, addPlayer, setReminder.
+// POST /api/<fn> with {args:[...]}: getData, saveScore, saveTalk, removeScore, addPlayer, setReminder, practiceStart, practiceGet, practiceGuess.
 // Same rules and answer shapes as the old Apps Script, so the page only swapped its call() helper.
 // Key-protected (header x-key = secret WW_KEY): GET /api/remind (who gets tonight's 8 PM email; the Apps Script sends it),
 // POST /api/admin/import (copy everything from the old sheet) and GET /api/admin/compare (old answer vs new, row for row).
+import { ANSWERS, ALLOWED } from "../../lib/words.js";
+
 const TZ = "America/Chicago";
 const TALK_MAX = 200;
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxA7vOHXjLNmuVIoh2dwcK9WDefszC05_E5DRNbcLeIkQEJ-Mq8ufyxjcpAQcWzd8ip/exec";
@@ -38,6 +40,21 @@ function talkStmt(db, player, date, text) {
   // OR IGNORE: a double tap in the same millisecond must not roll back the score saved with it.
   return db.prepare("INSERT OR IGNORE INTO talk (id, player, date, puzzle, text, at) VALUES (?, ?, ?, ?, ?, ?)")
     .bind(at + "_" + player, player, date, puzzleOf(date), text, at);
+}
+
+// Colors for a guess: g = right spot, y = in the word elsewhere, x = not in it (repeat letters handled like Wordle).
+function marks(answer, guess) {
+  const m = Array(5).fill("x"), left = {};
+  for (let i = 0; i < 5; i++) {
+    if (guess[i] === answer[i]) m[i] = "g";
+    else left[answer[i]] = (left[answer[i]] || 0) + 1;
+  }
+  for (let i = 0; i < 5; i++) if (m[i] === "x" && left[guess[i]]) { m[i] = "y"; left[guess[i]]--; }
+  return m.join("");
+}
+function gameView(answer, rows) {
+  const won = rows.includes(answer), over = won || rows.length >= 6;
+  return { rows: rows.map(w => ({ w, m: marks(answer, w) })), status: won ? "won" : over ? "lost" : "playing", ...(over ? { answer } : {}) };
 }
 
 async function getData(db) {
@@ -108,6 +125,37 @@ const ACTIONS = {
       log(db, "addPlayer", { id, name }),
     ]);
     return getData(db);
+  },
+
+  // Practice Wordle: anyone, unlimited, never touches the scoreboard.
+  async practiceStart(db) {
+    const id = crypto.randomUUID().replaceAll("-", ""), now = Date.now();
+    await db.batch([
+      db.prepare("DELETE FROM practice WHERE at < ?").bind(new Date(now - 2 * 864e5).toISOString()),
+      db.prepare("INSERT INTO practice (id, answer, guesses, at) VALUES (?, ?, '', ?)")
+        .bind(id, ANSWERS[Math.floor(Math.random() * ANSWERS.length)], new Date(now).toISOString()),
+    ]);
+    return { id };
+  },
+
+  async practiceGet(db, id) {
+    const g = await db.prepare("SELECT answer, guesses FROM practice WHERE id = ?").bind(String(id)).first();
+    if (!g) throw new Oops("That game expired. Start a new one.");
+    return gameView(g.answer, g.guesses ? g.guesses.split(",") : []);
+  },
+
+  async practiceGuess(db, id, guess) {
+    id = String(id); guess = String(guess || "").toLowerCase();
+    const g = await db.prepare("SELECT answer, guesses FROM practice WHERE id = ?").bind(id).first();
+    if (!g) throw new Oops("That game expired. Start a new one.");
+    const rows = g.guesses ? g.guesses.split(",") : [];
+    if (rows.length >= 6 || rows.includes(g.answer)) throw new Oops("That game is over.");
+    if (!/^[a-z]{5}$/.test(guess)) throw new Oops("Five letters, please.");
+    if (!ALLOWED.has(guess)) throw new Oops("Not in the word list.");
+    rows.push(guess);
+    await db.prepare("UPDATE practice SET guesses = ? WHERE id = ?").bind(rows.join(","), id).run();
+    const v = gameView(g.answer, rows);
+    return { marks: v.rows[rows.length - 1].m, status: v.status, ...(v.answer ? { answer: v.answer } : {}) };
   },
 
   async setReminder(db, id, on, email) {
