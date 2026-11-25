@@ -799,6 +799,7 @@ ${titles.length ? `<div class="chips">${titles.map(c => `<span class="pill done"
 ${p.remind ? `<button class="btn ghost" data-action="remindoff" data-id="${esc(id)}">Turn off</button>` : ""}
 </div>
 </section>
+${pushCard(id, p)}
 ${newWay() ? "" : `<button class="btn ghost" data-action="me" data-id="${esc(id)}" data-stay="1">${state.me === id ? "This phone logs as " + esc(p.name) : "This is me"}</button>`}`;
 }
 function renderTabs(cur){
@@ -884,6 +885,52 @@ if(!state.ready || !name) return;
 try{ apply(await call("addPlayer", name)); state.addName = ""; toast(name + " is in the war."); }
 catch(e){ writeFailed(e); }
 render();
+}
+/* ---------- Push reminder (a notification on this phone if today's word isn't done) ---------- */
+const PUSH_OK = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const IS_APP = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
+function pushCard(id, p){
+let body;
+if(!PUSH_OK) body = IS_IOS && !IS_APP
+? '<p class="note">To get push reminders on iPhone: tap Share, then Add to Home Screen, then open Wordle Wars from the new icon and come back here.</p>'
+: '<p class="note">This browser can\'t do push reminders.</p>';
+else if(Notification.permission === "denied") body = '<p class="note">Notifications are blocked for Wordle Wars. Turn them on in Settings, Notifications, Wordle Wars, then come back.</p>';
+else if(recall("ww_push") === id) body = `<p class="note"><strong>Push is on for this phone.</strong> At 8 PM Central, if ${esc(p.name)} hasn't logged or played today's word, this phone gets a notification.</p>
+<div class="inline"><button class="btn small" data-action="pushtest">Send a test</button><button class="btn ghost" data-action="pushoff">Turn off</button></div>`;
+else body = `<p class="note">At 8 PM Central, if ${esc(p.name)} hasn't logged or played today's word, this phone gets a notification.</p>
+<div class="inline"><button class="btn small" data-action="pushon" data-id="${esc(id)}">Turn on push</button></div>`;
+return `<section class="card"><h2>Push reminder</h2>${body}</section>`;
+}
+function keyBytes(s){ const b = atob(s.replace(/-/g,"+").replace(/_/g,"/")); return Uint8Array.from(b, c => c.charCodeAt(0)); }
+async function pushSub(){ return (await navigator.serviceWorker.ready).pushManager.getSubscription(); }
+async function pushOn(id){
+if(!PUSH_OK) return;
+try{
+// Ask first, straight from the tap: iPhone only shows the permission prompt while the tap is still fresh.
+if(await Notification.requestPermission() !== "granted"){ toast("Push wasn't allowed."); render(); return; }
+const key = state.acct && state.acct.vapidKey;
+if(!key) throw new Error("Push isn't set up yet.");
+const reg = await navigator.serviceWorker.ready;
+const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:keyBytes(key)});
+await call("pushOn", id, sub.endpoint);
+store("ww_push", id); toast("Push is on. Tap Send a test to check.");
+}catch(e){ writeFailed(e); }
+render();
+}
+async function pushOff(){
+try{
+const sub = await pushSub();
+if(sub){ await call("pushOff", sub.endpoint); await sub.unsubscribe(); }
+store("ww_push", null); toast("Push is off.");
+}catch(e){ writeFailed(e); }
+render();
+}
+async function pushTest(){
+try{
+const sub = await pushSub(); if(!sub) throw new Error("Turn push on first.");
+await call("pushTest", sub.endpoint); toast("Test sent. It should land in a few seconds.");
+}catch(e){ writeFailed(e); }
 }
 async function setReminder(id, on){
 const p = state.players[id]; if(!state.ready || !p) return;
@@ -974,6 +1021,9 @@ else if(a === "remove") removeScore();
 else if(a === "addplayer") addPlayer();
 else if(a === "remindon") setReminder(b.dataset.id, true);
 else if(a === "remindoff") setReminder(b.dataset.id, false);
+else if(a === "pushon") pushOn(b.dataset.id);
+else if(a === "pushoff") pushOff();
+else if(a === "pushtest") pushTest();
 });
 document.addEventListener("input", e => {
 const el = e.target, k = el.dataset && el.dataset.input; if(!k) return;
@@ -1012,6 +1062,8 @@ try{ apply(await call("getData")); }
 catch(e){ if(!state.ready) state.error = true; }
 render();
 }
+if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+if(PUSH_OK) pushSub().then(s => { if(!s && recall("ww_push")){ store("ww_push", null); render(); } }).catch(() => {});
 refresh();
 restorePractice();
 loadMe();

@@ -1,9 +1,10 @@
 // Wordle Wars API: the page's calls, backed by the D1 database "wordle-wars" (binding DB).
 // POST /api/<fn> with {args:[...]}: getData, saveScore, saveTalk, removeScore, addPlayer, setReminder, practiceGet, practiceGuess,
 // and (these also see the signed-in account) me, authEmail, authCode, authGoogle, logout, setName, practiceStart, dailyGet, dailyGuess,
-// talkPost, adminList, adminApprove, adminKick.
+// talkPost, adminList, adminApprove, adminKick, pushOn, pushOff, pushTest.
 // Same rules and answer shapes as the old Apps Script, so the page only swapped its call() helper.
 // Key-protected (header x-key = secret WW_KEY): GET /api/remind (who gets tonight's 8 PM email; the Apps Script sends it),
+// POST /api/push/send (8 PM push to phones whose player hasn't logged or played today; the Apps Script triggers it),
 // POST /api/admin/import (copy everything from the old sheet) and GET /api/admin/compare (old answer vs new, row for row).
 import { ANSWERS, ALLOWED } from "../../lib/words.js";
 
@@ -99,7 +100,7 @@ async function getAccount(db, request) {
     .bind(await sha(m[1]), new Date().toISOString()).first();
 }
 function meView(a, env) {
-  const base = { googleClientId: env.GOOGLE_CLIENT_ID || "", emailReady: !!env.RESEND_API_KEY };
+  const base = { googleClientId: env.GOOGLE_CLIENT_ID || "", emailReady: !!env.RESEND_API_KEY, vapidKey: env.VAPID_PUBLIC || "" };
   if (!a) return { ...base, signedIn: false };
   return { ...base, signedIn: true, email: a.email, name: a.name, status: a.status, player: a.player, admin: a.email === ADMIN };
 }
@@ -250,6 +251,31 @@ const ACTIONS = {
 // Calls that see the signed-in account: c = { db, env, request, account }.
 const SESSION_ACTIONS = {
   me: c => meView(c.account, c.env),
+
+  async pushOn(c, id, endpoint) {
+    id = String(id); endpoint = String(endpoint || "");
+    if (!pushOk(endpoint)) throw new Oops("That phone's push address isn't one we can use.");
+    if (!(await playerExists(c.db, id))) throw new Oops("That player is gone.");
+    await c.db.batch([
+      c.db.prepare("INSERT INTO push_subs (endpoint, player, at) VALUES (?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET player = excluded.player").bind(endpoint, id, new Date().toISOString()),
+      log(c.db, "pushOn", { id }),
+    ]);
+    return { ok: true };
+  },
+
+  async pushOff(c, endpoint) {
+    await c.db.batch([c.db.prepare("DELETE FROM push_subs WHERE endpoint = ?").bind(String(endpoint || "")), log(c.db, "pushOff", {})]);
+    return { ok: true };
+  },
+
+  // Sends one push to this phone right now, so it can be checked without waiting for 8 PM.
+  async pushTest(c, endpoint) {
+    endpoint = String(endpoint || "");
+    if (!(await c.db.prepare("SELECT 1 FROM push_subs WHERE endpoint = ?").bind(endpoint).first())) throw new Oops("Turn push on first.");
+    const status = await sendPush(c.env, endpoint);
+    if (status < 200 || status > 299) throw new Oops("The push didn't go through (" + status + ").");
+    return { ok: true };
+  },
 
   async authEmail(c, email) {
     const { db, env, request } = c;
@@ -428,6 +454,42 @@ const SESSION_ACTIONS = {
   },
 };
 
+// ---------- push ----------
+// Classic Web Push with no payload (never Declarative Web Push: iPhone then skips the service worker). The service worker
+// in public/sw.js shows the notification when the empty push arrives.
+const PUSH_HOSTS = /^(web\.push\.apple\.com|fcm\.googleapis\.com|updates\.push\.services\.mozilla\.com|[a-z0-9.-]+\.notify\.windows\.com)$/;
+function pushOk(endpoint) {
+  try { const u = new URL(endpoint); return u.protocol === "https:" && endpoint.length < 800 && PUSH_HOSTS.test(u.hostname); } catch { return false; }
+}
+const b64u = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const unb64u = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), ch => ch.charCodeAt(0));
+async function sendPush(env, endpoint) {
+  if (!env.VAPID_PUBLIC || !env.VAPID_PRIVATE) throw new Oops("Push isn't set up on the server yet.");
+  const pub = unb64u(env.VAPID_PUBLIC);
+  const key = await crypto.subtle.importKey("jwk", { kty: "EC", crv: "P-256", d: env.VAPID_PRIVATE, x: b64u(pub.slice(1, 33)), y: b64u(pub.slice(33)) },
+    { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+  const head = b64u(enc(JSON.stringify({ typ: "JWT", alg: "ES256" })));
+  const claims = b64u(enc(JSON.stringify({ aud: new URL(endpoint).origin, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: "mailto:" + ADMIN })));
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, enc(head + "." + claims)));
+  const r = await fetch(endpoint, { method: "POST", headers: { authorization: "vapid t=" + head + "." + claims + "." + b64u(sig) + ", k=" + env.VAPID_PUBLIC, ttl: "3600", urgency: "high" } });
+  return r.status;
+}
+// Phones whose player has neither logged a score today nor finished today's Wordle.
+async function pushDue(db, env) {
+  const t = today();
+  const subs = (await db.prepare(
+    "SELECT endpoint FROM push_subs WHERE player NOT IN (SELECT player FROM scores WHERE date = ?1) AND player NOT IN (SELECT player FROM daily WHERE date = ?1 AND score IS NOT NULL)"
+  ).bind(t).all()).results;
+  let sent = 0, gone = 0, failed = 0;
+  for (const s of subs) {
+    const status = await sendPush(env, s.endpoint).catch(() => 0);
+    if (status === 404 || status === 410) { gone++; await db.prepare("DELETE FROM push_subs WHERE endpoint = ?").bind(s.endpoint).run(); }
+    else if (status >= 200 && status < 300) sent++;
+    else failed++;
+  }
+  return { today: t, due: subs.length, sent, gone, failed };
+}
+
 // ---------- key-protected ----------
 async function remindList(db) {
   const t = today();
@@ -482,9 +544,10 @@ async function compare(db, env) {
 export async function onRequest({ request, env, params }) {
   const path = (params.path || []).join("/");
   try {
-    if (path === "remind" || path.startsWith("admin/")) {
+    if (path === "remind" || path === "push/send" || path.startsWith("admin/")) {
       if (!env.WW_KEY || request.headers.get("x-key") !== env.WW_KEY) return json({ error: "Not allowed." }, 403);
       if (path === "remind" && request.method === "GET") return json(await remindList(env.DB));
+      if (path === "push/send" && request.method === "POST") return json(await pushDue(env.DB, env));
       if (path === "admin/import" && request.method === "POST") return json(await importSheet(env.DB, env));
       if (path === "admin/compare" && request.method === "GET") return json(await compare(env.DB, env));
       return json({ error: "Not found." }, 404);

@@ -216,7 +216,14 @@ function remindList_() {
   }).map(function (p) { return { id: str_(p.id), name: str_(p.name), email: str_(p.email) }; });
   return { n: puzzleOf_(t), players: players };
 }
+// Also pushes to phones that turned on push (the site decides who is due).
+function sendPushes_() {
+  if (!moved_()) return;
+  const r = UrlFetchApp.fetch(APP_URL + 'api/push/send', { method: 'post', headers: { 'x-key': PROPS.getProperty('WW_KEY') }, muteHttpExceptions: true });
+  if (r.getResponseCode() !== 200) throw new Error('Push send failed: ' + r.getResponseCode() + ' ' + r.getContentText().slice(0, 200));
+}
 function sendReminders() {
+  try { sendPushes_(); } catch (e) { console.error(e); }
   const list = remindList_();
   const url = APP_URL;
   const num = list.n.toLocaleString('en-US');

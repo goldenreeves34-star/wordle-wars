@@ -13,3 +13,5 @@ database_id = "e81dc4c2-482c-447a-bdf9-ed25f83adfa2"
 # Secret set in the dashboard, never here: RESEND_API_KEY (sends the sign-in code emails from noreply@reevesrestorations.com).
 [vars]
 GOOGLE_CLIENT_ID = "205546949895-d7eilghfngkf2o654cfg22rbri2o1b7v.apps.googleusercontent.com"
+# Push reminders: VAPID_PUBLIC is the public half of the push signing key. Secret set in the dashboard, never here: VAPID_PRIVATE.
+VAPID_PUBLIC = "BN_p9-vBlaosXwtPo0_tkedkDaZrHNuG2Kmzj5y5gvL0wG-vkR084ENJD8O8-LPREVD9cFWNePPBsC6xjOqKK-4"

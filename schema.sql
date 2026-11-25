@@ -95,3 +95,9 @@ CREATE TABLE IF NOT EXISTS history (
   action TEXT NOT NULL,
   detail TEXT NOT NULL DEFAULT ''
 );
+-- Phones that asked for the "you haven't played today's word" push (Nov 25, 2026). One row per phone; endpoint is the phone's push address.
+CREATE TABLE IF NOT EXISTS push_subs (
+  endpoint TEXT PRIMARY KEY,
+  player TEXT NOT NULL,
+  at TEXT NOT NULL
+);
