@@ -19,6 +19,7 @@ The family's monthly Wordle competition: https://wordlewars.reevesrestorations.c
 Our own Wordle inside the app. Anyone can play as many practice games as they like; practice never touches the scoreboard. "Today's Wordle" (the one game a day that counts) is coming December 1 with sign-in (email code and Google), a kick button for Golden, and approval for new accounts.
 
 - **Answers stay on the server.** `practiceStart` picks a word and stores it in the `practice` table; `practiceGuess` checks a guess and returns only the colors (g right spot, y elsewhere, x not in it); the answer is sent back only when the game ends. `practiceGet` restores a game after a reload. Games older than 2 days are deleted when a new one starts.
+- **Locking letters (Nov 26, 2026):** on the row being typed, tapping a letter locks it in that spot (green outline and underline); typing and backspace then skip locked spots, and locks carry to the next guess until tapped again or the game ends. Page only (`public/index.html`: `pressKey`, `toggleLock`, `guessOf`); the server still checks every guess.
 - **Word lists:** `lib/words.js` (server only, never in `public/`). `ANSWERS` (about 1,600) is the public Wordle list filtered to words most US adults know and use today: common in modern spoken English (OpenSubtitles frequency), then hand-checked; no names, slang, plurals, archaic or vulgar words. `ALLOWED` (about 14,900) is every word accepted as a guess. To add or drop an answer, edit the `ANSWERS` string.
 
 ## Accounts and today's Wordle (since Nov 25, 2026)
