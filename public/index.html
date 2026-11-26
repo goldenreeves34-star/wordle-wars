@@ -265,7 +265,7 @@ function myPlayer(){ const a = state.acct; return a && a.signedIn && a.status ==
 const CROWN = '<svg class="crown" viewBox="0 0 16 12" aria-hidden="true"><path fill="currentColor" d="M1 11h14l-1-8-3.5 3L8 1 5.5 6 2 3z"/></svg>';
 /* ---------- State ---------- */
 const state = {
-ready:false, view:"board", profileId:null,
+ready:false, view:"play", profileId:null,
 players:{}, scores:[], adj:[], champs:{}, talk:[],
 loaded:{players:false, scores:false, adjustments:false, champions:false},
 stale:false, error:null,
@@ -706,6 +706,7 @@ const r = g.mode === "daily" ? await call("dailyGuess", w) : await call("practic
 g.rows.push({w, m:r.marks}); g.t = ["","","","",""]; if(r.status !== "playing") g.lk = ["","","","",""]; g.status = r.status; if(r.answer) g.answer = r.answer;
 g.anim = g.rows.length - 1;
 setTimeout(() => { g.anim = null; if(state.game === g) render(); }, 1600);
+if(g.mode === "daily" && r.status !== "playing") setTimeout(() => { if(state.game === g && state.view === "play") go("board"); }, 3200);
 if(g.mode === "daily"){ state.daily = {rows:g.rows, status:g.status, answer:g.answer}; if(r.status !== "playing") refresh(); }
 else if(r.status !== "playing") store("ww_practice", null);
 }catch(e){

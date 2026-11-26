@@ -30,6 +30,7 @@ Our own Wordle inside the app. Anyone can play as many practice games as they li
 - **Admin page** (Play tab, "Admin", Golden only): approve an account as an existing player (keeps their history) or a new player, or deny/kick. A kick blocks that email for good and wipes that player's scores, games, trash talk and row.
 - **Today's word:** a fixed shuffle of `ANSWERS` seeded by the secret `WW_KEY`, one word per day starting Nov 25, no repeats until the list runs out (about 4.4 years). Editing `ANSWERS` or changing `WW_KEY` reshuffles the days after that change. Practice never hands out any of the next 30 days' words.
 - **Anti-cheat:** the answer never leaves the server until the game ends; a guess only counts if nothing else wrote to that game in between, so firing many guesses at once can't reveal extra colors.
+- **Opening tab (Nov 26, 2026):** the site opens on Play (`view:"play"` in `state`), and finishing today's Wordle switches to the Board about 3 seconds later, after the tiles flip (`submitGuess`).
 - **Trash talk** from Dec 1 is posted on the Board by signed-in players (`talkPost`).
 - `public/privacy.html` is the privacy page Google's sign-in setup links to.
 
