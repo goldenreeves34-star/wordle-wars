@@ -644,7 +644,7 @@ return `${header()}<button class="back" data-action="go" data-to="play">‹ Play
 }
 async function loadMe(){
 try{ state.acct = await call("me"); }catch(e){ state.acct = {signedIn:false}; }
-await loadDaily(); render();
+await loadDaily(); render(); syncBadge();
 }
 async function loadDaily(){
 if(!myPlayer()){ state.daily = null; return; }
@@ -911,11 +911,11 @@ if(!PUSH_OK) body = IS_IOS && !IS_APP
 ? '<p class="note">To get push reminders on iPhone: tap Share, then Add to Home Screen, then open Wordle Wars from the new icon and come back here.</p>'
 : '<p class="note">This browser can\'t do push reminders.</p>';
 else if(Notification.permission === "denied") body = '<p class="note">Notifications are blocked for Wordle Wars. Turn them on in Settings, Notifications, Wordle Wars, then come back.</p>';
-else if(recall("ww_push") === id) body = `<p class="note"><strong>Push is on for this phone.</strong> At 8 PM Central, if ${esc(p.name)} hasn't logged or played today's word, this phone gets a notification.</p>
+else if(recall("ww_push") === id) body = `<p class="note"><strong>Push is on for this phone.</strong> At 8 PM Central, if ${esc(p.name)} hasn't logged or played today's word, this phone gets a notification and a red 1 on the app icon. The 1 goes away once today's word is done.</p>
 <div class="inline"><button class="btn small" data-action="pushtest">Send a test</button><button class="btn ghost" data-action="pushoff">Turn off</button></div>`;
-else body = `<p class="note">At 8 PM Central, if ${esc(p.name)} hasn't logged or played today's word, this phone gets a notification.</p>
+else body = `<p class="note">At 8 PM Central, if ${esc(p.name)} hasn't logged or played today's word, this phone gets a notification and a red 1 on the app icon.</p>
 <div class="inline"><button class="btn small" data-action="pushon" data-id="${esc(id)}">Turn on push</button></div>`;
-return `<section class="card"><h2>Push reminder</h2>${body}</section>`;
+return `<section class="card"><h2>Push reminder and red badge</h2>${body}</section>`;
 }
 function keyBytes(s){ const b = atob(s.replace(/-/g,"+").replace(/_/g,"/")); return Uint8Array.from(b, c => c.charCodeAt(0)); }
 async function pushSub(){ return (await navigator.serviceWorker.ready).pushManager.getSubscription(); }
@@ -929,15 +929,23 @@ if(!key) throw new Error("Push isn't set up yet.");
 const reg = await navigator.serviceWorker.ready;
 const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:keyBytes(key)});
 await call("pushOn", id, sub.endpoint);
-store("ww_push", id); toast("Push is on. Tap Send a test to check.");
+store("ww_push", id); syncBadge(); toast("Push is on. Tap Send a test to check.");
 }catch(e){ writeFailed(e); }
 render();
+}
+// The red 1 on the app icon: on while this phone's player still owes today's word, cleared once it's done.
+function syncBadge(){
+const id = recall("ww_push");
+if(!navigator.setAppBadge || !id || !state.ready) return;
+const t = todayStr();
+const done = state.scores.some(s => s.player === id && s.date === t) || (myPlayer() === id && state.daily && state.daily.status !== "playing");
+(done ? navigator.clearAppBadge() : navigator.setAppBadge(1)).catch(() => {});
 }
 async function pushOff(){
 try{
 const sub = await pushSub();
 if(sub){ await call("pushOff", sub.endpoint); await sub.unsubscribe(); }
-store("ww_push", null); toast("Push is off.");
+store("ww_push", null); if(navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {}); toast("Push is off.");
 }catch(e){ writeFailed(e); }
 render();
 }
@@ -1010,6 +1018,7 @@ state.trial = data.trial || [];
 const c = {}; (data.champs || []).forEach(x => c[x.id] = x); state.champs = c;
 Object.keys(state.loaded).forEach(k => state.loaded[k] = true);
 state.ready = true; state.error = null; state.stale = false;
+syncBadge();
 }
 document.addEventListener("click", e => {
 const b = e.target.closest("[data-action]"); if(!b || b.disabled) return;
