@@ -199,6 +199,8 @@ text-transform:uppercase; color:var(--muted); border-radius:8px; position:relati
 .k.g{background:var(--green); color:#fff} .k.y{background:var(--yellow); color:#fff} .k.x{background:var(--key-miss); color:#fff}
 .k:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
 .result{text-align:center; font:italic 400 30px/1.1 var(--serif); text-wrap:balance}
+.ask{position:fixed; inset:0; z-index:8; background:rgba(0,0,0,.45); display:flex; align-items:flex-end; justify-content:center; padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
+.ask .card{width:100%; max-width:420px}
 .toast{position:fixed; left:50%; bottom:calc(132px + env(safe-area-inset-bottom)); transform:translateX(-50%);
 background:var(--ink); color:var(--paper); padding:12px 16px; border-radius:8px; font-weight:700; font-size:15px;
 max-width:calc(100% - 32px); z-index:9; animation:pop .25s ease both}
@@ -219,6 +221,7 @@ max-width:calc(100% - 32px); z-index:9; animation:pop .25s ease both}
 <body>
 <main class="wrap" id="app"></main>
 <nav class="tabs" aria-label="Sections"><div class="tabs-in" id="tabs"></div></nav>
+<div id="ask-host"></div>
 <div id="toast-host"></div>
 <script>
 (function(){
@@ -644,7 +647,7 @@ return `${header()}<button class="back" data-action="go" data-to="play">‹ Play
 }
 async function loadMe(){
 try{ state.acct = await call("me"); }catch(e){ state.acct = {signedIn:false}; }
-await loadDaily(); render(); syncBadge();
+await loadDaily(); render(); syncBadge(); maybeAskPush();
 }
 async function loadDaily(){
 if(!myPlayer()){ state.daily = null; return; }
@@ -933,6 +936,15 @@ store("ww_push", id); syncBadge(); toast("Push is on. Tap Send a test to check."
 }catch(e){ writeFailed(e); }
 render();
 }
+// Pop-up asking this phone's player to turn on push (and the red badge): next open, then once a week until it's on.
+function maybeAskPush(){
+if(maybeAskPush.shown || !state.ready || !state.acct) return;
+const id = myPlayer() || state.me, p = state.players[id];
+if(!p || (!PUSH_OK && !(IS_IOS && !IS_APP)) || (PUSH_OK && recall("ww_push"))) return;
+if(Date.now() - Number(recall("ww_pushask") || 0) < 7*864e5) return;
+maybeAskPush.shown = true; store("ww_pushask", String(Date.now()));
+document.getElementById("ask-host").innerHTML = `<div class="ask" role="dialog" aria-modal="true">${pushCard(id, p).replace("</section>", '<button class="btn ghost" data-action="askclose">Not now</button></section>')}</div>`;
+}
 // The red 1 on the app icon: on while this phone's player still owes today's word, cleared once it's done.
 function syncBadge(){
 const id = recall("ww_push");
@@ -1018,11 +1030,13 @@ state.trial = data.trial || [];
 const c = {}; (data.champs || []).forEach(x => c[x.id] = x); state.champs = c;
 Object.keys(state.loaded).forEach(k => state.loaded[k] = true);
 state.ready = true; state.error = null; state.stale = false;
-syncBadge();
+syncBadge(); maybeAskPush();
 }
 document.addEventListener("click", e => {
 const b = e.target.closest("[data-action]"); if(!b || b.disabled) return;
 const a = b.dataset.action;
+if(b.closest("#ask-host")) document.getElementById("ask-host").innerHTML = "";
+if(a === "askclose") return;
 if(a === "go") go(b.dataset.to);
 else if(a === "profile") go("player-" + b.dataset.id);
 else if(a === "me"){ state.me = b.dataset.id; store("ww_me", state.me); if(b.dataset.stay) toast("This phone logs as " + pname(state.me) + "."); render(); }
